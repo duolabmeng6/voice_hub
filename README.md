@@ -118,7 +118,15 @@ voice_hub/providers/aliyun/qwen_tts
 
 ## 阿里云百炼 CosyVoice
 
-默认读取 `DASHSCOPE_API_KEY`。系统音色与复刻音色不要混用模型：系统音色使用 `cosyvoice-v3-flash`，复刻音色默认使用 `cosyvoice-v3.5-flash`。例如 `longanyang` 只能配 `cosyvoice-v3-flash`，不能配 `cosyvoice-v3.5-flash`。
+默认读取 `DASHSCOPE_API_KEY`，需要环境里已安装 DashScope SDK。
+
+这里把最常用的入口放在 `AliyunCosyVoiceTTS` 上：
+
+- 系统音色：直接实例化 `AliyunCosyVoiceTTS(...)`
+- 本地文件复刻：`AliyunCosyVoiceTTS.cloned(sample=...)`
+- 公网 URL 复刻：`AliyunCosyVoiceTTS.cloned(audio_url=...)`
+
+注意模型和音色必须匹配。当前系统音色使用 `cosyvoice-v3-flash`，复刻音色默认使用 `cosyvoice-v3.5-flash`。例如 `longanyang` 可以配 `cosyvoice-v3-flash`，不能配 `cosyvoice-v3.5-flash`。
 
 系统音色合成：
 
@@ -127,13 +135,12 @@ import voice_hub
 
 tts = voice_hub.AliyunCosyVoiceTTS(
     voice=voice_hub.AliyunCosyVoice.LONGANYANG,
-    model=voice_hub.ALIYUN_COSYVOICE_MODEL,
 )
 
 tts.speak("那我来给大家推荐一款T恤，这款颜色很显气质。").save("./tmp/cosyvoice.mp3")
 ```
 
-通过本地文件复刻音色：
+本地文件复刻音色：
 
 ```python
 tts = voice_hub.AliyunCosyVoiceTTS.cloned(
@@ -141,12 +148,16 @@ tts = voice_hub.AliyunCosyVoiceTTS.cloned(
     language_hints=["zh"],
 )
 
-tts.speak("恭喜，已成功复刻并合成了属于自己的声音。").save(
-    "./tmp/cosyvoice-clone-from-file.mp3"
+tts.to_file(
+    "恭喜，已成功复刻并合成了属于自己的声音。",
+    "./tmp/cosyvoice-clone-from-file.mp3",
 )
+
+print(tts.voice_result.voice_id)
+print(tts.voice_result.reused)
 ```
 
-通过公网 URL 复刻音色：
+公网 URL 复刻音色：
 
 ```python
 tts = voice_hub.AliyunCosyVoiceTTS.cloned(
@@ -159,7 +170,24 @@ tts = voice_hub.AliyunCosyVoiceTTS.cloned(
 tts.speak("How is the weather today?").save("./tmp/cosyvoice-clone.mp3")
 ```
 
-需要管理音色时，可以使用底层管理器：
+复刻时默认会先复用已有音色，避免每次调用都创建新音色：
+
+- `sample=...`：使用 `target_model + 文件内容` 的 MD5 派生 10 位以内前缀。
+- `audio_url=...`：使用 `target_model + audio_url` 的 MD5 派生 10 位以内前缀。
+- 创建前会先按前缀 `list_voices`，已有 `OK` 或 `DEPLOYING` 音色时直接复用。
+- 也可以显式传入 `prefix`，例如 `prefix="myvoice"`。
+
+本地文件模式会自动走百炼文件管理服务：
+
+```text
+本地音频文件
+  └── 上传到 /api/v1/files
+      └── 查询文件详情拿临时 OSS URL
+          └── 调用 CosyVoice create_voice
+              └── 使用 voice_id 合成语音
+```
+
+需要管理音色生命周期时，再使用底层管理器：
 
 ```python
 clone = voice_hub.AliyunCosyVoiceClone(
@@ -170,15 +198,6 @@ result = clone.get_or_create_voice_from_file("./tmp/voice-clones/vc30.wav")
 clone.wait_until_ready(result.voice_id)
 clone.tts(result.voice_id).speak("你好").save("./tmp/cosyvoice-clone.mp3")
 ```
-
-本地文件模式内部会先上传到百炼文件管理服务 `/api/v1/files`，查询文件详情拿到临时 OSS URL，再调用 CosyVoice 复刻接口。
-
-复用策略：
-
-- `get_or_create_voice` 默认使用 `target_model + audio_url` 的 MD5 派生 10 位以内前缀。
-- `get_or_create_voice_from_file` 默认使用 `target_model + 文件内容` 的 MD5 派生前缀。
-- 两者都会先按前缀 `list_voices`，已有 `OK` 或 `DEPLOYING` 音色时复用，没有才创建，避免频繁创建占用音色配额。
-- 也可以显式传入 `prefix`，例如 `prefix="myvoice"`。
 
 常用复刻参数：
 
@@ -251,6 +270,9 @@ voice_hub.MimoTTS.cloned(
 - `style`：语气、语速、情绪、方言等自然语言控制
 - `MINIMAX_KEY`：MiniMax API Key，`MinimaxTTS()` 未显式传入 `api_key` 时默认读取
 - `MINIMAX_SYSTEM_VOICES`：MiniMax 官方系统音色列表，包含 Voice ID、语言、名称和备注
+- `DASHSCOPE_API_KEY`：阿里云百炼 API Key，`AliyunTTS` 和 `AliyunCosyVoiceTTS` 未显式传入 `api_key` 时默认读取
+- `ALIYUN_COSYVOICE_MODEL`：CosyVoice 系统音色默认模型，当前为 `cosyvoice-v3-flash`
+- `ALIYUN_COSYVOICE_CLONE_MODEL`：CosyVoice 复刻音色默认模型，当前为 `cosyvoice-v3.5-flash`
 
 ## 预置音色
 
