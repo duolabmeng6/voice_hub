@@ -6,19 +6,9 @@ class FakeEngine:
         self.marker = marker
 
     def speak(self, text, **overrides):
-        return voice_hub.Speech(FakeProvider(self.marker), text, overrides)
-
-
-class FakeProvider:
-    def __init__(self, marker):
-        self.marker = marker
-
-    def synthesize(self, text, **overrides):
         suffix = overrides.get("suffix", "")
-        return f"{self.marker}:{text}{suffix}".encode("utf-8")
-
-    def stream_synthesize(self, text, **overrides):
-        yield self.synthesize(text, **overrides)
+        audio = f"{self.marker}:{text}{suffix}".encode("utf-8")
+        return voice_hub.Speech(audio, text=text, overrides=overrides)
 
 
 def test_client_routes_default_speaker():

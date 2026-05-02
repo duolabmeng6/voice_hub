@@ -108,6 +108,28 @@ def test_mimo_builtin_voice_payload():
     assert payload["audio"] == {"format": "wav", "voice": "冰糖"}
 
 
+def test_mimo_speak_is_explicit_provider_entrypoint():
+    transport = FakeTransport()
+    tts = MimoTTS(api_key="key", voice=MimoVoice.MOLI, transport=transport)
+
+    speech = tts.speak("你好")
+
+    assert speech.bytes() == b"audio-bytes"
+    assert speech.metadata["provider"] == "MimoTTS"
+    assert speech.metadata["payload"]["audio"] == {"format": "wav", "voice": "茉莉"}
+
+
+def test_mimo_build_payload_does_not_send_request():
+    transport = FakeTransport()
+    tts = MimoTTS(api_key="key", voice=MimoVoice.BINGTANG, transport=transport)
+
+    payload = tts.build_payload("你好", voice=MimoVoice.MOLI)
+
+    assert transport.posts == []
+    assert payload["audio"] == {"format": "wav", "voice": "茉莉"}
+    assert payload["messages"] == [{"role": "assistant", "content": "你好"}]
+
+
 def test_mimo_voice_design_payload():
     transport = FakeTransport()
     tts = MimoTTS.designed(

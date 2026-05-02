@@ -5,11 +5,13 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Iterator, Mapping, Optional
 
 from ..errors import ConfigurationError, ProviderError
 from ..sample import VoiceSample
+from ..speech import Speech
 from .base import BaseTTS
 
 
@@ -199,6 +201,32 @@ class MimoTTS(BaseTTS):
         self.voice_sample = self._normalize_sample(voice_sample)
         self._validate_config()
 
+    def speak(self, text: str, **overrides: object) -> Speech:
+        """合成语音并返回音频结果。
+
+        这是 MiMo provider 的主调试入口。断点打在这里，可以直接跟到
+        请求体构造、HTTP 请求和响应解析。
+        """
+        request = self.build_request(text, stream=False, **overrides)
+        response = self.transport.post(
+            self.base_url,
+            self.api_key,
+            request.to_payload(),
+            self.timeout,
+        )
+        audio = self._decode_message_audio(response)
+        return Speech(
+            audio,
+            text=text,
+            overrides=overrides,
+            metadata={
+                "provider": self.__class__.__name__,
+                "base_url": self.base_url,
+                "model": request.model,
+                "payload": request.to_payload(),
+            },
+        )
+
     @classmethod
     def designed(
         cls,
@@ -245,21 +273,38 @@ class MimoTTS(BaseTTS):
             **kwargs,
         )
 
+    def build_payload(self, text: str, stream: bool = False, **overrides: object) -> dict[str, object]:
+        """构造最终 MiMo 请求体，不发送网络请求。"""
+        return self.build_request(text, stream=stream, **overrides).to_payload()
+
+    def build_request(self, text: str, stream: bool = False, **overrides: object) -> MimoRequest:
+        """构造最终 MiMo 请求对象，不发送网络请求。"""
+        return self._build_request(text, stream=stream, overrides=overrides)
+
     def synthesize(self, text: str, **overrides: object) -> bytes:
-        request = self._build_request(text, stream=False, overrides=overrides)
-        response = self.transport.post(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
-        return self._decode_message_audio(response)
+        """合成语音并返回字节。
+
+        保留这个显式方法，便于需要原始 bytes 的调用方直接断点调试。
+        """
+        return self.speak(text, **overrides).bytes()
+
+    def bytes(self, text: str, **overrides: object) -> bytes:
+        """合成语音并返回完整音频字节。"""
+        return self.synthesize(text, **overrides)
+
+    def to_file(self, text: str, path: str | Path, **overrides: object) -> str:
+        """合成语音并保存到文件。"""
+        return self.speak(text, **overrides).save(path)
+
+    def stream(self, text: str, **overrides: object) -> Iterable[bytes]:
+        """流式合成语音并返回音频分片。"""
+        return self.stream_synthesize(text, **overrides)
 
     def stream_synthesize(self, text: str, **overrides: object) -> Iterable[bytes]:
         stream_overrides = dict(overrides)
         stream_overrides.setdefault("format", "pcm16")
 
-        request = self._build_request(text, stream=True, overrides=stream_overrides)
+        request = self.build_request(text, stream=True, **stream_overrides)
         events = self.transport.stream(
             self.base_url,
             self.api_key,

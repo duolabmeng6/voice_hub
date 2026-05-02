@@ -28,6 +28,11 @@ def load_env(path: Path) -> None:
 load_env(Path(__file__).resolve().parents[1] / ".env")
 
 
+pytestmark = pytest.mark.skipif(
+    os.environ.get("VOICE_HUB_RUN_LIVE_TESTS") != "1",
+    reason="需要真实 MiMo 凭据和网络，默认跳过手工联网测试",
+)
+
 
 def test_mimo_builtin_voice_constants_match_docs():
 
