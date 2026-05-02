@@ -29,12 +29,6 @@ client.speaker("广告音").speak("限时优惠，现在开始。").save("ad.mp3
 - **少改业务代码**：换声音、换模型、换 provider，不需要到处改生成逻辑。
 - **音频结果一致**：统一拿 bytes、保存文件、读取 metadata。
 
-- PyPI: <https://pypi.org/project/duolabmeng6-voice-hub/>
-- 下载统计: <https://pepy.tech/project/duolabmeng6-voice-hub>
-- PyPIStats: <https://pypistats.org/packages/duolabmeng6-voice-hub>
-- 仓库: <https://github.com/duolabmeng6/voice_hub>
-- Issues: <https://github.com/duolabmeng6/voice_hub/issues>
-
 ## 安装
 
 ```bash
@@ -373,38 +367,9 @@ tts.speak("How is the weather today?").save("./tmp/cosyvoice-clone.mp3")
 - 创建前会先按前缀 `list_voices`，已有 `OK` 或 `DEPLOYING` 音色时直接复用。
 - 也可以显式传入 `prefix`，例如 `prefix="myvoice"`。
 
-## 本地验证
+## 详细教程
 
-普通单测不发真实网络请求：
-
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
-  tests/test_client.py \
-  tests/test_glm.py \
-  tests/test_mimo.py \
-  tests/test_minimax.py \
-  tests/test_aliyun.py \
-  tests/test_aliyun_cosyvoice.py \
-  -q
-```
-
-真实调用测试集中在 `tests/test_my.py`，会读取本地 `.env` 并调用真实 provider：
-
-```bash
-VOICE_HUB_RUN_LIVE_TESTS=1 python -m pytest tests/test_my.py -q -s
-```
-
-## 发布检查
-
-构建并检查包：
-
-```bash
-python -m build
-python -m twine check dist/*
-```
-
-发布到 PyPI 后，可以从以下地址确认版本、包文件和下载统计：
-
-- <https://pypi.org/project/duolabmeng6-voice-hub/>
-- <https://pepy.tech/project/duolabmeng6-voice-hub>
-- <https://pypistats.org/packages/duolabmeng6-voice-hub>
+- [阿里云百炼语音合成接入流程](https://github.com/duolabmeng6/voice_hub/blob/main/docs/aliyun-tts.md)
+- [智谱 GLM TTS 接入流程](https://github.com/duolabmeng6/voice_hub/blob/main/docs/glm-tts.md)
+- [MiniMax 语音合成接入流程](https://github.com/duolabmeng6/voice_hub/blob/main/docs/minimax-tts.md)
+- [MiMo 语音合成接入流程](https://github.com/duolabmeng6/voice_hub/blob/main/docs/mimo-tts.md)
