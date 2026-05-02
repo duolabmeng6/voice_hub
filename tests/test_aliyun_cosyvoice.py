@@ -258,6 +258,53 @@ def test_aliyun_cosyvoice_get_or_create_from_file_reuses_without_upload(tmp_path
     assert transport.created == []
 
 
+def test_aliyun_cosyvoice_tts_cloned_from_file_is_easy_entrypoint(tmp_path):
+    class EmptyListTransport(FakeCosyVoiceTransport):
+        def list_voices(self, **kwargs):
+            self.lists.append(kwargs)
+            return []
+
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"fake-wav")
+    transport = EmptyListTransport()
+
+    tts = AliyunCosyVoiceTTS.cloned(
+        api_key="key",
+        sample=sample,
+        language_hints=["zh"],
+        transport=transport,
+        wait=True,
+        poll_interval=0,
+    )
+    speech = tts.speak("你好")
+
+    assert tts.voice == "myvoice-prefix-001"
+    assert tts.model == ALIYUN_COSYVOICE_CLONE_MODEL
+    assert tts.voice_result is not None
+    assert tts.voice_result.reused is False
+    assert speech.bytes() == b"audio-bytes"
+    assert transport.uploads[0]["file_path"] == sample
+    assert transport.queries[0]["voice_id"] == "myvoice-prefix-001"
+    assert transport.syntheses[0]["voice"] == "myvoice-prefix-001"
+
+
+def test_aliyun_cosyvoice_tts_cloned_from_url_reuses_existing_voice():
+    transport = FakeCosyVoiceTransport()
+
+    tts = AliyunCosyVoiceTTS.cloned(
+        api_key="key",
+        audio_url="https://example.com/sample.wav",
+        prefix="myvoice",
+        transport=transport,
+        wait=False,
+    )
+
+    assert tts.voice == "myvoice-prefix-001"
+    assert tts.voice_result is not None
+    assert tts.voice_result.reused is True
+    assert transport.created == []
+
+
 def test_aliyun_cosyvoice_wait_until_ready_returns_ok():
     transport = FakeCosyVoiceTransport()
     clone = AliyunCosyVoiceClone(api_key="key", transport=transport)

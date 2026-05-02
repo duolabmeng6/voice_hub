@@ -9,9 +9,11 @@ from ....errors import ConfigurationError
 from ....speech import Speech
 from ...base import BaseTTS
 from .models import (
+    ALIYUN_COSYVOICE_CLONE_MODEL,
     ALIYUN_COSYVOICE_HTTP_BASE_URL,
     ALIYUN_COSYVOICE_MODEL,
     ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
+    AliyunCosyVoiceEnrollmentResult,
     AliyunCosyVoiceRequest,
 )
 from .transport import AliyunCosyVoiceSDKTransport
@@ -58,6 +60,7 @@ class AliyunCosyVoiceTTS(BaseTTS):
         self.websocket_base_url = websocket_base_url
         self.transport = transport or AliyunCosyVoiceSDKTransport()
         self.timeout = timeout
+        self.voice_result: AliyunCosyVoiceEnrollmentResult | None = None
         self._validate_config()
 
     def speak(self, text: str, **overrides: object) -> Speech:
@@ -95,7 +98,72 @@ class AliyunCosyVoiceTTS(BaseTTS):
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
                 "payload": request.to_payload(),
+                "voice_result": self.voice_result,
             },
+        )
+
+    @classmethod
+    def cloned(
+        cls,
+        api_key: str | None = None,
+        sample: str | Path | None = None,
+        audio_url: str | None = None,
+        prefix: str | None = None,
+        language_hints: list[str] | None = None,
+        max_prompt_audio_length: float | None = None,
+        enable_preprocess: bool | None = None,
+        model: str = ALIYUN_COSYVOICE_CLONE_MODEL,
+        wait: bool = True,
+        max_attempts: int = 30,
+        poll_interval: float = 10,
+        format: str = "mp3",
+        sample_rate: int = 24000,
+        http_base_url: str = ALIYUN_COSYVOICE_HTTP_BASE_URL,
+        websocket_base_url: str = ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
+        transport: AliyunCosyVoiceSDKTransport | None = None,
+        timeout: float = 120,
+        **kwargs: object,
+    ) -> "AliyunCosyVoiceTTS":
+        """创建复刻音色 TTS provider，自动复用已有音色。"""
+        from .clone import AliyunCosyVoiceClone
+
+        if sample is None and audio_url is None:
+            raise ConfigurationError("sample or audio_url is required for CosyVoice clone")
+        if sample is not None and audio_url is not None:
+            raise ConfigurationError("sample and audio_url cannot be used together")
+
+        clone = AliyunCosyVoiceClone(
+            api_key=api_key,
+            target_model=model,
+            http_base_url=http_base_url,
+            websocket_base_url=websocket_base_url,
+            transport=transport,
+            timeout=timeout,
+        )
+        if sample is not None:
+            result = clone.get_or_create_voice_from_file(
+                sample,
+                prefix=prefix,
+                language_hints=language_hints,
+                max_prompt_audio_length=max_prompt_audio_length,
+                enable_preprocess=enable_preprocess,
+            )
+        else:
+            result = clone.get_or_create_voice(
+                audio_url=str(audio_url),
+                prefix=prefix,
+                language_hints=language_hints,
+                max_prompt_audio_length=max_prompt_audio_length,
+                enable_preprocess=enable_preprocess,
+            )
+        return clone.tts_from_voice(
+            result,
+            wait=wait,
+            max_attempts=max_attempts,
+            poll_interval=poll_interval,
+            format=format,
+            sample_rate=sample_rate,
+            **kwargs,
         )
 
     def build_payload(self, text: str, **overrides: object) -> dict[str, object]:

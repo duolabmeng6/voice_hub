@@ -308,17 +308,13 @@ def test_aliyun_cosyvoice_clone_create_and_tts():
 
 @live_only
 def test_aliyun_cosyvoice_clone_from_file_and_tts():
-    clone = voice_hub.AliyunCosyVoiceClone(
-        api_key=os.environ["DASHSCOPE_API_KEY"],
-        target_model=voice_hub.ALIYUN_COSYVOICE_CLONE_MODEL,
-        timeout=120,
-    )
-    sample = Path(os.environ.get("ALIYUN_COSYVOICE_SAMPLE_FILE", "./tmp/voice-clones/vc30.wav"))
     output = Path("./tmp/aliyun_cosyvoice_clone_from_file.mp3")
+    sample = Path(os.environ.get("ALIYUN_COSYVOICE_SAMPLE_FILE", "./tmp/voice-clones/vc30.wav"))
 
     try:
-        result = clone.get_or_create_voice_from_file(
-            sample,
+        tts = voice_hub.AliyunCosyVoiceTTS.cloned(
+            api_key=os.environ["DASHSCOPE_API_KEY"],
+            sample=sample,
             prefix=os.environ.get("ALIYUN_COSYVOICE_PREFIX"),
             language_hints=[os.environ.get("ALIYUN_COSYVOICE_LANGUAGE", "zh")],
             max_prompt_audio_length=float(os.environ["ALIYUN_COSYVOICE_MAX_PROMPT_AUDIO_LENGTH"])
@@ -327,23 +323,21 @@ def test_aliyun_cosyvoice_clone_from_file_and_tts():
             enable_preprocess=os.environ.get("ALIYUN_COSYVOICE_ENABLE_PREPROCESS") == "1"
             if os.environ.get("ALIYUN_COSYVOICE_ENABLE_PREPROCESS") is not None
             else None,
-        )
-        info = clone.wait_until_ready(
-            result.voice_id,
+            timeout=120,
             max_attempts=int(os.environ.get("ALIYUN_COSYVOICE_MAX_ATTEMPTS", "30")),
             poll_interval=float(os.environ.get("ALIYUN_COSYVOICE_POLL_INTERVAL", "10")),
         )
-        speech = clone.tts(result.voice_id).speak("恭喜，已成功复刻并合成了属于自己的声音。")
+        speech = tts.speak("恭喜，已成功复刻并合成了属于自己的声音。")
         saved = speech.save(output)
     except voice_hub.VoiceHubError as exc:
         _fail_without_secret(exc)
 
+    result = tts.voice_result
     print(
         {
             "sample": str(sample),
-            "voice_id": result.voice_id,
-            "reused": result.reused,
-            "status": info.get("status"),
+            "voice_id": result.voice_id if result else tts.voice,
+            "reused": result.reused if result else None,
             "saved": saved,
             "audio_bytes": len(speech.bytes()),
             "synth_request_id": speech.metadata.get("request_id"),

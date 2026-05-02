@@ -280,6 +280,25 @@ class AliyunCosyVoiceClone:
             **kwargs,
         )
 
+    def tts_from_voice(
+        self,
+        result: AliyunCosyVoiceEnrollmentResult,
+        *,
+        wait: bool = True,
+        max_attempts: int = 30,
+        poll_interval: float = 10,
+        **kwargs: object,
+    ) -> AliyunCosyVoiceTTS:
+        if wait:
+            self.wait_until_ready(
+                result.voice_id,
+                max_attempts=max_attempts,
+                poll_interval=poll_interval,
+            )
+        tts = self.tts(result.voice_id, **kwargs)
+        tts.voice_result = result
+        return tts
+
     def _validate_config(self) -> None:
         if not self.api_key or not self.api_key.strip():
             raise ConfigurationError("Aliyun CosyVoice api_key is required")
