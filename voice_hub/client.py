@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional, Protocol
+from typing import Dict, Iterable, Optional
 
 from .errors import NoDefaultSpeakerError, SpeakerNotFoundError
+from .interfaces import TTSEngine
 from .speech import Speech
-
-
-class TTSEngine(Protocol):
-    def speak(self, text: str, **overrides: object) -> Speech:
-        ...
 
 
 class Client:

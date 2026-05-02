@@ -8,6 +8,7 @@ from .errors import (
     SpeakerNotFoundError,
     VoiceHubError,
 )
+from .interfaces import TTSEngine
 from .providers import (
     MIMO_BUILTIN_VOICE_BY_ID,
     MIMO_BUILTIN_VOICE_IDS,
@@ -37,6 +38,7 @@ __all__ = [
     "Speaker",
     "SpeakerNotFoundError",
     "Speech",
+    "TTSEngine",
     "VoiceHubError",
     "VoiceSample",
 ]

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from ..interfaces import TTSEngine
 from ..speech import Speech
 
 
-class BaseTTS:
+class BaseTTS(TTSEngine):
     """厂商 TTS 的最小公共接口。"""
 
     def speak(self, text: str, **overrides: object) -> Speech:
