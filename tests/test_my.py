@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -36,7 +37,7 @@ live_only = pytest.mark.skipif(
 
 def _fail_without_secret(exc: Exception) -> None:
     message = str(exc)
-    for key in ("MINIMAX_KEY", "MIMO_API_KEY", "MIMO_TOKEN_KEY"):
+    for key in ("MINIMAX_KEY", "MINIMAX_KEY2", "MIMO_API_KEY", "MIMO_TOKEN_KEY"):
         secret = os.environ.get(key)
         if secret:
             message = message.replace(secret, f"<redacted {key}>")
@@ -149,3 +150,25 @@ def test_minimax_obj():
         tts.speak("今天是不是很开心呀(laughs)，当然了！").save("./tmp/minimax.mp3")
     except voice_hub.VoiceHubError as exc:
         _fail_without_secret(exc)
+
+
+@live_only
+def test_minimax_voice_clone_preview_only():
+    tts = voice_hub.MinimaxTTS.cloned(
+        api_key=os.environ["MINIMAX_KEY2"],
+        sample=voice_hub.VoiceSample("./tmp/voice-clones/vc30.wav"),
+        voice_id=f"VoiceHubClone{int(time.time())}{os.getpid()}",
+        model=voice_hub.MINIMAX_VOICE_CLONE_MODEL,
+        need_noise_reduction=True,
+        need_volume_normalization=True,
+        language_boost="Chinese",
+    )
+    try:
+        speech = tts.speak("今天是不是很开心呀(laughs)，当然了！")
+        speech.save("./tmp/minimax-clone-preview.mp3")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    assert speech.metadata["voice_id"].startswith("VoiceHubClone")
+    assert speech.metadata["endpoint"] == "voice_clone"
+    assert Path("./tmp/minimax-clone-preview.mp3").exists()

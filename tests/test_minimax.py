@@ -8,8 +8,11 @@ from voice_hub.providers.minimax import (
     MINIMAX_SYSTEM_VOICES,
     MINIMAX_SYSTEM_VOICES_BY_LANGUAGE,
     MINIMAX_T2A_MODEL,
+    MINIMAX_VOICE_CLONE_MODEL,
+    MinimaxClonePrompt,
     MinimaxTTS,
     MinimaxVoice,
+    MinimaxVoiceClone,
 )
 
 
@@ -62,6 +65,41 @@ class FakeTransport:
                 },
             },
         ]
+
+
+class FakeVoiceCloneTransport:
+    def __init__(self):
+        self.uploads = []
+        self.clones = []
+        self.posts = []
+        self.streams = []
+
+    def upload_file(self, base_url, api_key, file_path, purpose, timeout):
+        self.uploads.append((base_url, api_key, file_path, purpose, timeout))
+        return {
+            "file": {"file_id": f"file-{purpose}"},
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+        }
+
+    def voice_clone(self, base_url, api_key, payload, timeout):
+        self.clones.append((base_url, api_key, payload, timeout))
+        return {
+            "voice_id": payload["voice_id"],
+            "demo_audio": "https://filecdn.minimax.chat/public/demo.mp3",
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+            "trace_id": "clone-trace",
+        }
+
+    def download_url(self, url, timeout):
+        return b"demo-audio-bytes"
+
+    def post(self, base_url, api_key, payload, timeout):
+        self.posts.append((base_url, api_key, payload, timeout))
+        raise AssertionError("voice clone must not call t2a post")
+
+    def stream(self, base_url, api_key, payload, timeout):
+        self.streams.append((base_url, api_key, payload, timeout))
+        raise AssertionError("voice clone must not call t2a stream")
 
 
 def test_minimax_builtin_voice_constants():
@@ -204,3 +242,106 @@ def test_minimax_raises_provider_error_for_base_resp():
 
     with pytest.raises(voice_hub.ProviderError, match="status_code=2013"):
         tts.bytes("你好")
+
+
+def test_minimax_voice_clone_reads_key2_and_uploads(tmp_path, monkeypatch):
+    monkeypatch.setenv("MINIMAX_KEY2", "clone-key")
+    sample = tmp_path / "clone.wav"
+    sample.write_bytes(b"fake-wav")
+    transport = FakeVoiceCloneTransport()
+    client = MinimaxVoiceClone(transport=transport)
+
+    file_id = client.upload_clone_audio(sample)
+
+    assert file_id == "file-voice_clone"
+    assert transport.uploads == [
+        (MINIMAX_BASE_URL, "clone-key", sample, "voice_clone", 120),
+    ]
+
+
+def test_minimax_voice_clone_from_file_builds_preview_payload(tmp_path):
+    sample = tmp_path / "clone.mp3"
+    sample.write_bytes(b"fake-mp3")
+    prompt = tmp_path / "prompt.m4a"
+    prompt.write_bytes(b"fake-m4a")
+    transport = FakeVoiceCloneTransport()
+    client = MinimaxVoiceClone(api_key="clone-key", transport=transport)
+
+    result = client.clone_from_file(
+        sample,
+        "VoiceHubClone01",
+        "大兄弟，听您口音不是本地人吧。",
+        prompt_path=prompt,
+        prompt_text="后来认为啊，是有人抓这鸡。",
+        need_noise_reduction=True,
+        language_boost="Chinese",
+    )
+
+    assert result.voice_id == "VoiceHubClone01"
+    assert result.file_id == "file-voice_clone"
+    assert result.demo_audio_url == "https://filecdn.minimax.chat/public/demo.mp3"
+    assert len(transport.uploads) == 2
+    assert transport.uploads[0][3] == "voice_clone"
+    assert transport.uploads[1][3] == "prompt_audio"
+
+    payload = transport.clones[0][2]
+    assert payload == {
+        "file_id": "file-voice_clone",
+        "voice_id": "VoiceHubClone01",
+        "text": "大兄弟，听您口音不是本地人吧。",
+        "model": MINIMAX_VOICE_CLONE_MODEL,
+        "need_noise_reduction": True,
+        "need_volume_normalization": False,
+        "clone_prompt": {
+            "prompt_audio": "file-prompt_audio",
+            "prompt_text": "后来认为啊，是有人抓这鸡。",
+        },
+        "language_boost": "Chinese",
+    }
+    assert transport.posts == []
+    assert transport.streams == []
+
+
+def test_minimax_voice_clone_payload_accepts_prompt_object():
+    client = MinimaxVoiceClone(api_key="clone-key", transport=FakeVoiceCloneTransport())
+
+    payload = client.build_clone_payload(
+        file_id=123,
+        voice_id="VoiceHubClone02",
+        text="hello",
+        clone_prompt=MinimaxClonePrompt(prompt_audio=456, prompt_text="hello."),
+    )
+
+    assert payload["clone_prompt"] == {"prompt_audio": 456, "prompt_text": "hello."}
+
+
+def test_minimax_voice_clone_rejects_invalid_voice_id():
+    client = MinimaxVoiceClone(api_key="clone-key", transport=FakeVoiceCloneTransport())
+
+    with pytest.raises(voice_hub.ConfigurationError, match="voice_id"):
+        client.build_clone_payload(file_id=1, voice_id="bad_", text="hello")
+
+
+def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
+    sample = tmp_path / "clone.wav"
+    sample.write_bytes(b"fake-wav")
+    output = tmp_path / "minimax.mp3"
+    transport = FakeVoiceCloneTransport()
+    tts = MinimaxTTS.cloned(
+        api_key="clone-key",
+        sample=voice_hub.VoiceSample(sample),
+        voice_id="VoiceHubClone03",
+        transport=transport,
+        language_boost="Chinese",
+    )
+
+    saved_path = tts.speak("今天是不是很开心呀(laughs)，当然了！").save(output)
+
+    assert saved_path == str(output)
+    assert output.read_bytes() == b"demo-audio-bytes"
+    assert transport.uploads[0][3] == "voice_clone"
+    assert transport.clones[0][2]["text"] == "今天是不是很开心呀(laughs)，当然了！"
+    assert transport.clones[0][2]["voice_id"] == "VoiceHubClone03"
+    assert transport.clones[0][2]["language_boost"] == "Chinese"
+    assert transport.posts == []
+    assert transport.streams == []

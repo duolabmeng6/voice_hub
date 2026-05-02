@@ -6,9 +6,17 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from ...errors import ConfigurationError
+from ...sample import VoiceSample
 from ...speech import Speech
 from ..base import BaseTTS
-from .models import MINIMAX_BASE_URL, MINIMAX_T2A_MODEL, MinimaxRequest, MinimaxVoice
+from .clone import MinimaxVoiceClone
+from .models import (
+    MINIMAX_BASE_URL,
+    MINIMAX_T2A_MODEL,
+    MINIMAX_VOICE_CLONE_MODEL,
+    MinimaxRequest,
+    MinimaxVoice,
+)
 from .parser import MinimaxResponseParser
 from .payload import MinimaxPayloadBuilder
 from .transport import MinimaxHTTPTransport
@@ -31,7 +39,7 @@ class MinimaxTTS(BaseTTS):
         self,
         api_key: str | None = None,
         voice: str = MinimaxVoice.MALE_QN_QINGSE,
-        model: str = MINIMAX_T2A_MODEL,
+        model: str = MINIMAX_VOICE_CLONE_MODEL,
         format: str = "mp3",
         base_url: str = MINIMAX_BASE_URL,
         transport: MinimaxHTTPTransport | None = None,
@@ -111,6 +119,22 @@ class MinimaxTTS(BaseTTS):
             },
         )
 
+    @classmethod
+    def cloned(
+        cls,
+        api_key: str | None = None,
+        sample: VoiceSample | str | Path | None = None,
+        voice_id: str | None = None,
+        **kwargs: object,
+    ) -> "MinimaxVoiceCloneTTS":
+        """创建 MiniMax 快速复刻试听 provider，不调用正式 T2A 合成接口。"""
+        return MinimaxVoiceCloneTTS(
+            api_key=api_key,
+            sample=sample,
+            voice_id=voice_id,
+            **kwargs,
+        )
+
     def build_payload(self, text: str, stream: bool = False, **overrides: object) -> dict[str, object]:
         """构造最终 MiniMax 请求体，不发送网络请求。"""
         return self.build_request(text, stream=stream, **overrides).to_payload()
@@ -182,3 +206,108 @@ class MinimaxTTS(BaseTTS):
         if self.timeout <= 0:
             raise ConfigurationError("MiniMax timeout must be greater than 0")
         self.build_payload("config check")
+
+
+class MinimaxVoiceCloneTTS(BaseTTS):
+    """兼容 TTS 写法的 MiniMax 快速复刻试听 provider。"""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        sample: VoiceSample | str | Path | None = None,
+        voice_id: str | None = None,
+        model: str = MINIMAX_T2A_MODEL,
+        base_url: str = MINIMAX_BASE_URL,
+        transport: MinimaxHTTPTransport | None = None,
+        timeout: float = 120,
+        prompt_sample: VoiceSample | str | Path | None = None,
+        prompt_text: str | None = None,
+        need_noise_reduction: bool = False,
+        need_volume_normalization: bool = False,
+        language_boost: str | None = None,
+        aigc_watermark: bool = False,
+        continuous_sound: bool = False,
+    ) -> None:
+        self.sample = self._normalize_sample_path(sample)
+        self.voice_id = voice_id
+        self.model = model
+        self.prompt_sample = self._normalize_sample_path(prompt_sample)
+        self.prompt_text = prompt_text
+        self.need_noise_reduction = need_noise_reduction
+        self.need_volume_normalization = need_volume_normalization
+        self.language_boost = language_boost
+        self.aigc_watermark = aigc_watermark
+        self.continuous_sound = continuous_sound
+        self.clone_client = MinimaxVoiceClone(
+            api_key=api_key,
+            base_url=base_url,
+            transport=transport,
+            timeout=timeout,
+        )
+        self._validate_clone_config()
+
+    def speak(self, text: str, **overrides: object) -> Speech:
+        """使用快速复刻试听接口返回音频，避免调用正式 ``/t2a_v2``。"""
+        sample = self._normalize_sample_path(overrides.pop("sample", self.sample))
+        prompt_sample = self._normalize_sample_path(overrides.pop("prompt_sample", self.prompt_sample))
+        prompt_text = overrides.pop("prompt_text", self.prompt_text)
+        voice_id = overrides.pop("voice_id", self.voice_id)
+
+        if sample is None:
+            raise ConfigurationError("MiniMax voice clone sample is required")
+        if not isinstance(voice_id, str) or not voice_id:
+            raise ConfigurationError("MiniMax voice clone voice_id is required")
+
+        options = {
+            "model": overrides.pop("model", self.model),
+            "need_noise_reduction": overrides.pop("need_noise_reduction", self.need_noise_reduction),
+            "need_volume_normalization": overrides.pop(
+                "need_volume_normalization",
+                self.need_volume_normalization,
+            ),
+            "language_boost": overrides.pop("language_boost", self.language_boost),
+            "aigc_watermark": overrides.pop("aigc_watermark", self.aigc_watermark),
+            "continuous_sound": overrides.pop("continuous_sound", self.continuous_sound),
+        }
+        if overrides:
+            unknown = ", ".join(sorted(overrides))
+            raise TypeError(f"unsupported MiniMax voice clone override(s): {unknown}")
+
+        return self.clone_client.speak(
+            text,
+            path=sample,
+            voice_id=voice_id,
+            prompt_path=prompt_sample,
+            prompt_text=prompt_text if isinstance(prompt_text, str) else None,
+            **options,
+        )
+
+    def synthesize(self, text: str, **overrides: object) -> bytes:
+        return self.speak(text, **overrides).bytes()
+
+    def bytes(self, text: str, **overrides: object) -> bytes:
+        return self.synthesize(text, **overrides)
+
+    def to_file(self, text: str, path: str | Path, **overrides: object) -> str:
+        return self.speak(text, **overrides).save(path)
+
+    def stream(self, text: str, **overrides: object) -> Iterable[bytes]:
+        yield self.speak(text, **overrides).bytes()
+
+    def _validate_clone_config(self) -> None:
+        if self.sample is None:
+            raise ConfigurationError("MiniMax voice clone sample is required")
+        if not self.voice_id:
+            raise ConfigurationError("MiniMax voice clone voice_id is required")
+        if self.prompt_sample is not None and not self.prompt_text:
+            raise ConfigurationError("MiniMax prompt_text is required when prompt_sample is provided")
+
+    @staticmethod
+    def _normalize_sample_path(sample: VoiceSample | str | Path | object | None) -> Path | None:
+        if sample is None:
+            return None
+        if isinstance(sample, VoiceSample):
+            return sample.path
+        if isinstance(sample, (str, Path)):
+            return Path(sample)
+        raise TypeError("MiniMax voice clone sample must be a path or VoiceSample")

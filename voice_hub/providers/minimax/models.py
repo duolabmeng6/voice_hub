@@ -7,6 +7,7 @@ from .voices import MinimaxVoice
 
 MINIMAX_BASE_URL = "https://api.minimaxi.com/v1"
 MINIMAX_T2A_MODEL = "speech-2.8-hd"
+MINIMAX_VOICE_CLONE_MODEL = "speech-2.8-hd"
 
 
 @dataclass(frozen=True)
@@ -50,3 +51,23 @@ class MinimaxRequest:
             payload["voice_modify"] = dict(self.voice_modify)
 
         return payload
+
+
+@dataclass(frozen=True)
+class MinimaxClonePrompt:
+    prompt_audio: str | int
+    prompt_text: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "prompt_audio": self.prompt_audio,
+            "prompt_text": self.prompt_text,
+        }
+
+
+@dataclass(frozen=True)
+class MinimaxVoiceCloneResult:
+    voice_id: str
+    file_id: str | int
+    demo_audio_url: str | None
+    raw_response: Mapping[str, object]

@@ -14,8 +14,13 @@ from .minimax import (
     MINIMAX_SYSTEM_VOICES,
     MINIMAX_SYSTEM_VOICES_BY_LANGUAGE,
     MINIMAX_T2A_MODEL,
+    MINIMAX_VOICE_CLONE_MODEL,
+    MinimaxClonePrompt,
     MinimaxTTS,
     MinimaxVoice,
+    MinimaxVoiceClone,
+    MinimaxVoiceCloneTTS,
+    MinimaxVoiceCloneResult,
     MinimaxVoiceSpec,
 )
 from .openai import OpenAITTS
@@ -28,6 +33,8 @@ __all__ = [
     "MINIMAX_SYSTEM_VOICES",
     "MINIMAX_SYSTEM_VOICES_BY_LANGUAGE",
     "MINIMAX_T2A_MODEL",
+    "MINIMAX_VOICE_CLONE_MODEL",
+    "MinimaxClonePrompt",
     "MIMO_BUILTIN_VOICE_BY_ID",
     "MIMO_BUILTIN_VOICE_IDS",
     "MIMO_BUILTIN_VOICES",
@@ -36,6 +43,9 @@ __all__ = [
     "MimoVoiceSpec",
     "MinimaxTTS",
     "MinimaxVoice",
+    "MinimaxVoiceClone",
+    "MinimaxVoiceCloneTTS",
+    "MinimaxVoiceCloneResult",
     "MinimaxVoiceSpec",
     "OpenAITTS",
 ]

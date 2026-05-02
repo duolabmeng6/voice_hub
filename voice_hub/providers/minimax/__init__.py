@@ -1,5 +1,13 @@
-from .models import MINIMAX_BASE_URL, MINIMAX_T2A_MODEL, MinimaxVoice
-from .tts import MinimaxTTS
+from .clone import MinimaxVoiceClone
+from .models import (
+    MINIMAX_BASE_URL,
+    MINIMAX_T2A_MODEL,
+    MINIMAX_VOICE_CLONE_MODEL,
+    MinimaxClonePrompt,
+    MinimaxVoice,
+    MinimaxVoiceCloneResult,
+)
+from .tts import MinimaxTTS, MinimaxVoiceCloneTTS
 from .voices import (
     MINIMAX_SYSTEM_VOICE_BY_ID,
     MINIMAX_SYSTEM_VOICE_IDS,
@@ -15,7 +23,12 @@ __all__ = [
     "MINIMAX_SYSTEM_VOICES",
     "MINIMAX_SYSTEM_VOICES_BY_LANGUAGE",
     "MINIMAX_T2A_MODEL",
+    "MINIMAX_VOICE_CLONE_MODEL",
+    "MinimaxClonePrompt",
     "MinimaxTTS",
     "MinimaxVoice",
+    "MinimaxVoiceClone",
+    "MinimaxVoiceCloneTTS",
+    "MinimaxVoiceCloneResult",
     "MinimaxVoiceSpec",
 ]
