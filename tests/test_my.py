@@ -34,6 +34,15 @@ live_only = pytest.mark.skipif(
 )
 
 
+def _fail_without_secret(exc: Exception) -> None:
+    message = str(exc)
+    for key in ("MINIMAX_KEY", "MIMO_API_KEY", "MIMO_TOKEN_KEY"):
+        secret = os.environ.get(key)
+        if secret:
+            message = message.replace(secret, f"<redacted {key}>")
+    pytest.fail(message, pytrace=False)
+
+
 @live_only
 def test_mimo_voice_hub():
     tts = voice_hub.Client()
@@ -78,7 +87,10 @@ def test_mimo_voice_hub():
         ),
         default=True,
     )
-    tts.speaker('冰糖').speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    try:
+        tts.speaker('冰糖').speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
     # tts.speaker('白桦').speak("夜深了，城市还没有睡。").save("./tmp/out2.wav")
     # tts.speaker('龙儿女生').speak("夜深了，城市还没有睡。").save("./tmp/out3.wav")
     # tts.speaker('龙儿克隆').speak("夜深了，城市还没有睡。").save("./tmp/out4.wav")
@@ -92,7 +104,10 @@ def test_mimo_obj():
         voice=voice_hub.MimoVoice.BINGTANG,
         style="自然、平稳",
     )
-    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    try:
+        tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
 
 
 @live_only
@@ -102,7 +117,10 @@ def test_mimo_designed():
         base_url=os.environ.get("MIMO_BASE_URL"),
         prompt="男性,自然、平稳",
     )
-    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    try:
+        tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
 
 
 @live_only
@@ -113,7 +131,10 @@ def test_mimo_cloned():
         sample=voice_hub.VoiceSample("./tmp/voice-clones/vc30.wav"),
         style="自然、快速讲话",
     )
-    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    try:
+        tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
 
 
 @live_only
@@ -124,4 +145,7 @@ def test_minimax_obj():
         emotion="happy",
         format="mp3",
     )
-    tts.speak("今天是不是很开心呀(laughs)，当然了！").save("./tmp/minimax.mp3")
+    try:
+        tts.speak("今天是不是很开心呀(laughs)，当然了！").save("./tmp/minimax.mp3")
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
