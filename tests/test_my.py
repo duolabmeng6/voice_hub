@@ -28,6 +28,13 @@ def load_env(path: Path) -> None:
 load_env(Path(__file__).resolve().parents[1] / ".env")
 
 
+live_only = pytest.mark.skipif(
+    os.environ.get("VOICE_HUB_RUN_LIVE_TESTS") != "1",
+    reason="set VOICE_HUB_RUN_LIVE_TESTS=1 to run live provider tests",
+)
+
+
+@live_only
 def test_mimo_voice_hub():
     tts = voice_hub.Client()
     tts.add_speaker(
@@ -77,6 +84,7 @@ def test_mimo_voice_hub():
     # tts.speaker('龙儿克隆').speak("夜深了，城市还没有睡。").save("./tmp/out4.wav")
 
 
+@live_only
 def test_mimo_obj():
     tts = voice_hub.MimoTTS(
         api_key=os.environ["MIMO_API_KEY"],
@@ -87,6 +95,7 @@ def test_mimo_obj():
     tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
 
 
+@live_only
 def test_mimo_designed():
     tts = voice_hub.MimoTTS.designed(
         api_key=os.environ["MIMO_API_KEY"],
@@ -96,6 +105,7 @@ def test_mimo_designed():
     tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
 
 
+@live_only
 def test_mimo_cloned():
     tts = voice_hub.MimoTTS.cloned(
         api_key=os.environ["MIMO_TOKEN_KEY"],
@@ -104,3 +114,14 @@ def test_mimo_cloned():
         style="自然、快速讲话",
     )
     tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+
+
+@live_only
+def test_minimax_obj():
+    tts = voice_hub.MinimaxTTS(
+        api_key=os.environ["MINIMAX_KEY"],
+        voice=voice_hub.MinimaxVoice.MALE_QN_QINGSE,
+        emotion="happy",
+        format="mp3",
+    )
+    tts.speak("今天是不是很开心呀(laughs)，当然了！").save("./tmp/minimax.mp3")
