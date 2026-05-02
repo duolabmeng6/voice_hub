@@ -2,7 +2,7 @@ import base64
 
 import pytest
 
-import voice_hub as vh
+import voice_hub
 from voice_hub.providers.mimo import (
     MIMO_BUILTIN_VOICE_BY_ID,
     MIMO_BUILTIN_VOICE_IDS,
@@ -134,7 +134,7 @@ def test_mimo_voice_clone_payload(tmp_path):
     transport = FakeTransport()
     tts = MimoTTS.cloned(
         api_key="key",
-        sample=vh.VoiceSample(sample_path),
+        sample=voice_hub.VoiceSample(sample_path),
         style="轻快",
         transport=transport,
     )

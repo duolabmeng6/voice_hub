@@ -1,4 +1,4 @@
-import voice_hub as vh
+import voice_hub
 
 
 class FakeEngine:
@@ -6,7 +6,7 @@ class FakeEngine:
         self.marker = marker
 
     def speak(self, text, **overrides):
-        return vh.Speech(FakeProvider(self.marker), text, overrides)
+        return voice_hub.Speech(FakeProvider(self.marker), text, overrides)
 
 
 class FakeProvider:
@@ -22,14 +22,14 @@ class FakeProvider:
 
 
 def test_client_routes_default_speaker():
-    tts = vh.Client()
+    tts = voice_hub.Client()
     tts.add_speaker("narrator", FakeEngine("a"), default=True)
 
     assert tts.bytes("你好", suffix="!") == "a:你好!".encode("utf-8")
 
 
 def test_client_routes_named_speaker():
-    tts = vh.Client()
+    tts = voice_hub.Client()
     tts.add_speaker("a", FakeEngine("a"), default=True)
     tts.add_speaker("b", FakeEngine("b"))
 

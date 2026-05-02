@@ -22,21 +22,21 @@ tts.speaker("xiaoxiao").speak("你好").save("xiaoxiao.wav")
 ## 2. 公开 API
 
 ```python
-import voicehub as vh
+import voice_hub
 
-vh.Client
+voice_hub.Client
 
-vh.MimoTTS
-vh.AzureTTS
-vh.OpenAITTS
+voice_hub.MimoTTS
+voice_hub.AzureTTS
+voice_hub.OpenAITTS
 
-vh.VoiceSample
+voice_hub.VoiceSample
 ```
 
 ### Client
 
 ```python
-tts = vh.Client()
+tts = voice_hub.Client()
 
 tts.add_speaker(name, engine, default=False)
 tts.set_default(name)
@@ -71,13 +71,13 @@ speech.stream()
 ## 3. 推荐用法
 
 ```python
-import voicehub as vh
+import voice_hub
 
-tts = vh.Client()
+tts = voice_hub.Client()
 
 tts.add_speaker(
     "narrator",
-    vh.MimoTTS(
+    voice_hub.MimoTTS(
         api_key="",
         voice="冰糖",
         style="自然、平稳",
@@ -94,7 +94,7 @@ tts.speak("夜深了，城市还没有睡。").save("out.wav")
 ```python
 tts.add_speaker(
     "bingtang",
-    vh.MimoTTS(
+    voice_hub.MimoTTS(
         api_key="",
         voice="冰糖",
         style="轻快、兴奋、语速稍快",
@@ -105,7 +105,7 @@ tts.add_speaker(
 
 tts.add_speaker(
     "xiaoxiao",
-    vh.AzureTTS(
+    voice_hub.AzureTTS(
         api_key="",
         region="eastasia",
         voice="zh-CN-XiaoxiaoNeural",
@@ -123,7 +123,7 @@ tts.speaker("xiaoxiao").speak("这是 Azure 晓晓的声音。").save("xiaoxiao.
 ### 普通音色
 
 ```python
-vh.MimoTTS(
+voice_hub.MimoTTS(
     api_key="",
     voice="冰糖",
     style="自然、平稳",
@@ -134,7 +134,7 @@ vh.MimoTTS(
 ### 设计音色
 
 ```python
-vh.MimoTTS.designed(
+voice_hub.MimoTTS.designed(
     api_key="",
     prompt="年轻女性，温柔、松弛、有轻微气声",
     style="自然、平稳",
@@ -145,7 +145,7 @@ vh.MimoTTS.designed(
 ### 克隆音色
 
 ```python
-vh.MimoTTS.cloned(
+voice_hub.MimoTTS.cloned(
     api_key="",
     sample="voice.mp3",
     style="自然、平稳",
@@ -156,9 +156,9 @@ vh.MimoTTS.cloned(
 可选样本对象：
 
 ```python
-sample = vh.VoiceSample("voice.mp3")
+sample = voice_hub.VoiceSample("voice.mp3")
 
-vh.MimoTTS.cloned(
+voice_hub.MimoTTS.cloned(
     api_key="",
     sample=sample,
 )
@@ -574,4 +574,3 @@ voicehub.create(...)
 本地缓存
 音色列表 list_voices()
 ```
-
