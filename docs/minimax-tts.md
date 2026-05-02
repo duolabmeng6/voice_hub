@@ -91,6 +91,12 @@ tts.to_file(
 
 最新音色以 MiniMax 官方文档/控制台为准，尤其是多语言音色和新模型音色可能会更新。
 
+官方入口：
+
+- 系统音色列表：https://platform.minimaxi.com/docs/faq/system-voice-id
+- 查询可用音色 ID API：https://platform.minimaxi.com/docs/api-reference/voice-management-get
+- 同步语音合成 T2A：https://platform.minimaxi.com/docs/api-reference/speech-t2a-intro
+
 代码里维护的是一份系统音色快照，用于常量补全和测试。查看当前内置快照：
 
 ```python

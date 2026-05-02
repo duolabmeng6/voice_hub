@@ -104,6 +104,13 @@ with open("./tmp/mimo-stream.pcm", "wb") as f:
 
 最新内置音色以 MiMo 官方文档/控制台为准。
 
+官方入口：
+
+- MiMo 官网：https://mimo.mi.com/
+- API Base URL：https://api.xiaomimimo.com/v1
+
+当前没有找到公开稳定的 MiMo 内置音色列表文档页；如果官方控制台后续提供独立音色列表，以控制台页面为准。
+
 代码里维护的是一份内置音色快照。查看当前内置快照：
 
 ```python
