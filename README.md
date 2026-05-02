@@ -53,12 +53,13 @@ tts.speaker("龙儿克隆").speak("夜深了，城市还没有睡。").save("./t
 ## 完整接入教程
 
 - [阿里云百炼语音合成接入流程](docs/aliyun-tts.md)
+- [智谱 GLM TTS 接入流程](docs/glm-tts.md)
 - [MiniMax 语音合成接入流程](docs/minimax-tts.md)
 - [MiMo 语音合成接入流程](docs/mimo-tts.md)
 
 ## 智谱 GLM TTS
 
-默认读取 `ZHIPUAI_API_KEY`，直接调用智谱 HTTP API。
+默认读取 `ZHIPUAI_API_KEY`，直接调用智谱 HTTP API。完整说明见 [智谱 GLM TTS 接入流程](docs/glm-tts.md)。
 
 ```python
 import voice_hub
