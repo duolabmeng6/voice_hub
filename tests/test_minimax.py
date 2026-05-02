@@ -322,6 +322,15 @@ def test_minimax_voice_clone_rejects_invalid_voice_id():
         client.build_clone_payload(file_id=1, voice_id="bad_", text="hello")
 
 
+def test_minimax_voice_clone_generates_unique_voice_id():
+    first = MinimaxVoiceClone.new_voice_id()
+    second = MinimaxVoiceClone.new_voice_id()
+
+    assert first != second
+    assert first.startswith("VoiceHubClone_")
+    assert MinimaxVoiceClone._VOICE_ID_PATTERN.fullmatch(first)
+
+
 def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
     sample = tmp_path / "clone.wav"
     sample.write_bytes(b"fake-wav")
@@ -330,7 +339,6 @@ def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
     tts = MinimaxTTS.cloned(
         api_key="clone-key",
         sample=voice_hub.VoiceSample(sample),
-        voice_id="VoiceHubClone03",
         transport=transport,
         language_boost="Chinese",
     )
@@ -341,7 +349,7 @@ def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
     assert output.read_bytes() == b"demo-audio-bytes"
     assert transport.uploads[0][3] == "voice_clone"
     assert transport.clones[0][2]["text"] == "今天是不是很开心呀(laughs)，当然了！"
-    assert transport.clones[0][2]["voice_id"] == "VoiceHubClone03"
+    assert transport.clones[0][2]["voice_id"].startswith("VoiceHubClone_")
     assert transport.clones[0][2]["language_boost"] == "Chinese"
     assert transport.posts == []
     assert transport.streams == []

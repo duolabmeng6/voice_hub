@@ -7,7 +7,7 @@ from .models import (
     MinimaxVoice,
     MinimaxVoiceCloneResult,
 )
-from .tts import MinimaxTTS, MinimaxVoiceCloneTTS
+from .tts import MinimaxTTS
 from .voices import (
     MINIMAX_SYSTEM_VOICE_BY_ID,
     MINIMAX_SYSTEM_VOICE_IDS,
@@ -28,7 +28,6 @@ __all__ = [
     "MinimaxTTS",
     "MinimaxVoice",
     "MinimaxVoiceClone",
-    "MinimaxVoiceCloneTTS",
     "MinimaxVoiceCloneResult",
     "MinimaxVoiceSpec",
 ]

@@ -19,7 +19,6 @@ from .minimax import (
     MinimaxTTS,
     MinimaxVoice,
     MinimaxVoiceClone,
-    MinimaxVoiceCloneTTS,
     MinimaxVoiceCloneResult,
     MinimaxVoiceSpec,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "MinimaxTTS",
     "MinimaxVoice",
     "MinimaxVoiceClone",
-    "MinimaxVoiceCloneTTS",
     "MinimaxVoiceCloneResult",
     "MinimaxVoiceSpec",
     "OpenAITTS",

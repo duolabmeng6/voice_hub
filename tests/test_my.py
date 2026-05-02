@@ -1,5 +1,4 @@
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -157,7 +156,6 @@ def test_minimax_voice_clone_preview_only():
     tts = voice_hub.MinimaxTTS.cloned(
         api_key=os.environ["MINIMAX_KEY2"],
         sample=voice_hub.VoiceSample("./tmp/voice-clones/vc30.wav"),
-        voice_id=f"VoiceHubClone{int(time.time())}{os.getpid()}",
         model=voice_hub.MINIMAX_VOICE_CLONE_MODEL,
         need_noise_reduction=True,
         need_volume_normalization=True,
@@ -169,6 +167,6 @@ def test_minimax_voice_clone_preview_only():
     except voice_hub.VoiceHubError as exc:
         _fail_without_secret(exc)
 
-    assert speech.metadata["voice_id"].startswith("VoiceHubClone")
+    assert speech.metadata["voice_id"].startswith("VoiceHubClone_")
     assert speech.metadata["endpoint"] == "voice_clone"
     assert Path("./tmp/minimax-clone-preview.mp3").exists()
