@@ -36,7 +36,13 @@ live_only = pytest.mark.skipif(
 
 def _fail_without_secret(exc: Exception) -> None:
     message = str(exc)
-    for key in ("MINIMAX_KEY", "MINIMAX_KEY2", "MIMO_API_KEY", "MIMO_TOKEN_KEY"):
+    for key in (
+        "DASHSCOPE_API_KEY",
+        "MINIMAX_KEY",
+        "MINIMAX_KEY2",
+        "MIMO_API_KEY",
+        "MIMO_TOKEN_KEY",
+    ):
         secret = os.environ.get(key)
         if secret:
             message = message.replace(secret, f"<redacted {key}>")
@@ -170,3 +176,131 @@ def test_minimax_voice_clone_preview_only():
     assert speech.metadata["voice_id"].startswith("VoiceHubClone_")
     assert speech.metadata["endpoint"] == "voice_clone"
     assert Path("./tmp/minimax-clone-preview.mp3").exists()
+
+
+@live_only
+def test_aliyun_qwen3_tts_instruct_flash_system_voice():
+    tts = voice_hub.AliyunTTS(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        voice=voice_hub.AliyunVoice.CHERRY,
+        instructions="语速较快，带有明显的上扬语调，适合介绍时尚产品",
+        timeout=120,
+    )
+    output = Path("./tmp/aliyun_qwen3_tts.wav")
+
+    try:
+        speech = tts.speak(
+            "那我来给大家推荐一款T恤，这款呢真的是超级好看，"
+            "这个颜色呢很显气质，而且呢也是搭配的绝佳单品，大家可以闭眼入。"
+        )
+        saved = speech.save(output)
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    print(
+        {
+            "saved": saved,
+            "audio_bytes": len(speech.bytes()),
+            "request_id": speech.metadata.get("request_id"),
+            "model": speech.metadata.get("model"),
+        }
+    )
+
+
+@live_only
+def test_aliyun_cosyvoice_system_voice():
+    tts = voice_hub.AliyunCosyVoiceTTS(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        voice=voice_hub.AliyunCosyVoice.LONGANYANG,
+        model=voice_hub.ALIYUN_COSYVOICE_MODEL,
+        timeout=120,
+    )
+    output = Path("./tmp/aliyun_cosyvoice_system.mp3")
+
+    try:
+        speech = tts.speak("那我来给大家推荐一款T恤，这款颜色很显气质。")
+        saved = speech.save(output)
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    print(
+        {
+            "saved": saved,
+            "audio_bytes": len(speech.bytes()),
+            "request_id": speech.metadata.get("request_id"),
+            "model": speech.metadata.get("model"),
+            "voice": speech.metadata.get("voice"),
+        }
+    )
+
+
+@live_only
+def test_aliyun_cosyvoice_clone_voice_id_tts():
+    voice_id = os.environ["ALIYUN_COSYVOICE_VOICE_ID"]
+    tts = voice_hub.AliyunCosyVoiceTTS(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        voice=voice_id,
+        model=voice_hub.ALIYUN_COSYVOICE_CLONE_MODEL,
+        timeout=120,
+    )
+    output = Path("./tmp/aliyun_cosyvoice_clone.mp3")
+
+    try:
+        speech = tts.speak("How is the weather today?")
+        saved = speech.save(output)
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    print(
+        {
+            "saved": saved,
+            "audio_bytes": len(speech.bytes()),
+            "request_id": speech.metadata.get("request_id"),
+            "model": speech.metadata.get("model"),
+            "voice": speech.metadata.get("voice"),
+        }
+    )
+
+
+@live_only
+def test_aliyun_cosyvoice_clone_create_and_tts():
+    clone = voice_hub.AliyunCosyVoiceClone(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        target_model=voice_hub.ALIYUN_COSYVOICE_CLONE_MODEL,
+        timeout=120,
+    )
+    output = Path("./tmp/aliyun_cosyvoice_clone_created.mp3")
+
+    try:
+        result = clone.get_or_create_voice(
+            audio_url=os.environ["ALIYUN_COSYVOICE_AUDIO_URL"],
+            prefix=os.environ.get("ALIYUN_COSYVOICE_PREFIX"),
+            language_hints=[os.environ.get("ALIYUN_COSYVOICE_LANGUAGE", "zh")],
+            max_prompt_audio_length=float(os.environ["ALIYUN_COSYVOICE_MAX_PROMPT_AUDIO_LENGTH"])
+            if os.environ.get("ALIYUN_COSYVOICE_MAX_PROMPT_AUDIO_LENGTH")
+            else None,
+            enable_preprocess=os.environ.get("ALIYUN_COSYVOICE_ENABLE_PREPROCESS") == "1"
+            if os.environ.get("ALIYUN_COSYVOICE_ENABLE_PREPROCESS") is not None
+            else None,
+        )
+        info = clone.wait_until_ready(
+            result.voice_id,
+            max_attempts=int(os.environ.get("ALIYUN_COSYVOICE_MAX_ATTEMPTS", "30")),
+            poll_interval=float(os.environ.get("ALIYUN_COSYVOICE_POLL_INTERVAL", "10")),
+        )
+        speech = clone.tts(result.voice_id).speak("How is the weather today?")
+        saved = speech.save(output)
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    print(
+        {
+            "voice_id": result.voice_id,
+            "create_request_id": result.request_id,
+            "reused": result.reused,
+            "status": info.get("status"),
+            "saved": saved,
+            "audio_bytes": len(speech.bytes()),
+            "synth_request_id": speech.metadata.get("request_id"),
+        }
+    )

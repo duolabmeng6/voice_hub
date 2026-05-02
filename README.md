@@ -87,6 +87,79 @@ client.add_speaker("minimax", voice_hub.MinimaxTTS(), default=True)
 client.to_file("夜深了，城市还没有睡。", "./tmp/minimax.mp3")
 ```
 
+## 阿里云百炼 Qwen TTS
+
+系统音色合成，默认读取 `DASHSCOPE_API_KEY`：
+
+```python
+import voice_hub
+
+tts = voice_hub.AliyunTTS(
+    voice=voice_hub.AliyunVoice.CHERRY,
+    instructions="语速较快，带有明显的上扬语调，适合介绍时尚产品",
+)
+
+tts.speak("那我来给大家推荐一款T恤，这款呢真的是超级好看。").save("./tmp/aliyun.wav")
+```
+
+默认模型是 `qwen3-tts-instruct-flash`。如需使用普通 Flash 模型：
+
+```python
+voice_hub.AliyunTTS(model=voice_hub.ALIYUN_QWEN_TTS_FLASH_MODEL)
+```
+
+新加坡地域可把 `base_url` 改为 `voice_hub.ALIYUN_INTL_BASE_URL`，注意北京和新加坡 API Key 不通用。
+
+代码目录：
+
+```text
+voice_hub/providers/aliyun/qwen_tts
+```
+
+## 阿里云百炼 CosyVoice
+
+系统音色合成：
+
+```python
+import voice_hub
+
+tts = voice_hub.AliyunCosyVoiceTTS(
+    voice=voice_hub.AliyunCosyVoice.LONGANYANG,
+    model=voice_hub.ALIYUN_COSYVOICE_MODEL,
+)
+
+tts.speak("那我来给大家推荐一款T恤，这款颜色很显气质。").save("./tmp/cosyvoice.mp3")
+```
+
+复刻音色合成：
+
+```python
+clone = voice_hub.AliyunCosyVoiceClone(
+    target_model=voice_hub.ALIYUN_COSYVOICE_CLONE_MODEL,
+)
+
+result = clone.get_or_create_voice(
+    audio_url="https://example.com/reference.wav",
+    language_hints=["zh"],
+    max_prompt_audio_length=20.0,
+    enable_preprocess=False,
+)
+clone.wait_until_ready(result.voice_id)
+
+tts = clone.tts(result.voice_id)
+tts.speak("How is the weather today?").save("./tmp/cosyvoice-clone.mp3")
+```
+
+`get_or_create_voice` 默认使用 `target_model + audio_url` 的 MD5 派生 10 位以内前缀，并先按前缀查询已有音色；已有 `OK` 或 `DEPLOYING` 音色时复用，没有才创建，避免频繁创建占用音色配额。也可以显式传入 `prefix`。
+
+`cosyvoice-v3.5-flash` 当前用于声音复刻/设计，不支持系统音色；系统音色默认使用 `cosyvoice-v3-flash`。
+
+代码目录：
+
+```text
+voice_hub/providers/aliyun/cosyvoice
+```
+
 ## MiMo 音色
 
 内置音色：

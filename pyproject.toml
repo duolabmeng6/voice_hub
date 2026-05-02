@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "duolabmeng6", email = "1715109585@qq.com" },
 ]
-keywords = ["tts", "speech-synthesis", "voice", "mimo", "xiaomi"]
+keywords = ["tts", "speech-synthesis", "voice", "mimo", "xiaomi", "aliyun", "dashscope"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
