@@ -50,6 +50,12 @@ tts.speaker("龙儿女生").speak("夜深了，城市还没有睡。").save("./t
 tts.speaker("龙儿克隆").speak("夜深了，城市还没有睡。").save("./tmp/龙儿克隆.wav")
 ```
 
+## 完整接入教程
+
+- [阿里云百炼语音合成接入流程](docs/aliyun-tts.md)
+- [MiniMax 语音合成接入流程](docs/minimax-tts.md)
+- [MiMo 语音合成接入流程](docs/mimo-tts.md)
+
 ## MiniMax 音色
 
 同步 HTTP 语音合成：
