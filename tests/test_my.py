@@ -28,14 +28,7 @@ def load_env(path: Path) -> None:
 load_env(Path(__file__).resolve().parents[1] / ".env")
 
 
-pytestmark = pytest.mark.skipif(
-    os.environ.get("VOICE_HUB_RUN_LIVE_TESTS") != "1",
-    reason="需要真实 MiMo 凭据和网络，默认跳过手工联网测试",
-)
-
-
-def test_mimo_builtin_voice_constants_match_docs():
-
+def test_mimo_voice_hub():
     tts = voice_hub.Client()
     tts.add_speaker(
         "冰糖",
@@ -44,7 +37,6 @@ def test_mimo_builtin_voice_constants_match_docs():
             base_url=os.environ.get("MIMO_BASE_URL"),
             voice=voice_hub.MimoVoice.BINGTANG,
             style="自然、平稳",
-            format="wav",
         ),
         default=True,
     )
@@ -56,7 +48,6 @@ def test_mimo_builtin_voice_constants_match_docs():
             base_url=os.environ.get("MIMO_BASE_URL"),
             voice=voice_hub.MimoVoice.BAIHUA,
             style="自然、平稳",
-            format="wav",
         ),
         default=True,
     )
@@ -67,7 +58,6 @@ def test_mimo_builtin_voice_constants_match_docs():
             base_url=os.environ.get("MIMO_TOKEN_BASE_URL"),
             prompt="年轻女性，温柔、松弛、有轻微气声",
             style="自然、平稳",
-            format="wav",
         ),
         default=True,
     )
@@ -78,11 +68,39 @@ def test_mimo_builtin_voice_constants_match_docs():
             base_url=os.environ.get("MIMO_TOKEN_BASE_URL"),
             sample=voice_hub.VoiceSample("./tmp/voice-clones/vc30.wav"),
             style="自然、快速讲话",
-            format="wav",
         ),
         default=True,
     )
-    # tts.speaker('冰糖').speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+    tts.speaker('冰糖').speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
     # tts.speaker('白桦').speak("夜深了，城市还没有睡。").save("./tmp/out2.wav")
     # tts.speaker('龙儿女生').speak("夜深了，城市还没有睡。").save("./tmp/out3.wav")
-    tts.speaker('龙儿克隆').speak("夜深了，城市还没有睡。").save("./tmp/out4.wav")
+    # tts.speaker('龙儿克隆').speak("夜深了，城市还没有睡。").save("./tmp/out4.wav")
+
+
+def test_mimo_obj():
+    tts = voice_hub.MimoTTS(
+        api_key=os.environ["MIMO_API_KEY"],
+        base_url=os.environ.get("MIMO_BASE_URL"),
+        voice=voice_hub.MimoVoice.BINGTANG,
+        style="自然、平稳",
+    )
+    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+
+
+def test_mimo_designed():
+    tts = voice_hub.MimoTTS.designed(
+        api_key=os.environ["MIMO_API_KEY"],
+        base_url=os.environ.get("MIMO_BASE_URL"),
+        prompt="男性,自然、平稳",
+    )
+    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
+
+
+def test_mimo_cloned():
+    tts = voice_hub.MimoTTS.cloned(
+        api_key=os.environ["MIMO_TOKEN_KEY"],
+        base_url=os.environ.get("MIMO_TOKEN_BASE_URL"),
+        sample=voice_hub.VoiceSample("./tmp/voice-clones/vc30.wav"),
+        style="自然、快速讲话",
+    )
+    tts.speak("夜深了，城市还没有睡。").save("./tmp/out.wav")
