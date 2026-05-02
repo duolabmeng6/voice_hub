@@ -24,6 +24,16 @@ class AliyunCosyVoiceEnrollmentResult:
 
 
 @dataclass(frozen=True)
+class AliyunCosyVoiceUploadedFile:
+    file_id: str
+    name: str
+    size: int | None = None
+    md5: str | None = None
+    url: str | None = None
+    request_id: str | None = None
+
+
+@dataclass(frozen=True)
 class AliyunCosyVoiceRequest:
     model: str
     voice: str

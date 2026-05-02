@@ -20,6 +20,8 @@ class FakeCosyVoiceTransport:
         self.queries = []
         self.lists = []
         self.deleted = []
+        self.uploads = []
+        self.files = []
 
     def synthesize(self, **kwargs):
         self.syntheses.append(kwargs)
@@ -44,6 +46,34 @@ class FakeCosyVoiceTransport:
     def delete_voice(self, **kwargs):
         self.deleted.append(kwargs)
         return "delete-request-1"
+
+    def upload_file(self, **kwargs):
+        self.uploads.append(kwargs)
+        return {
+            "request_id": "upload-request-1",
+            "data": {
+                "uploaded_files": [
+                    {
+                        "name": "sample.wav",
+                        "file_id": "file-1",
+                    }
+                ],
+                "failed_uploads": [],
+            },
+        }
+
+    def get_file(self, **kwargs):
+        self.files.append(kwargs)
+        return {
+            "request_id": "file-request-1",
+            "data": {
+                "file_id": kwargs["file_id"],
+                "name": "sample.wav",
+                "size": 123,
+                "md5": "abc",
+                "url": "https://dashscope-file.example/sample.wav",
+            },
+        }
 
 
 def test_aliyun_cosyvoice_system_voice_constants():
@@ -181,6 +211,51 @@ def test_aliyun_cosyvoice_get_or_create_creates_when_missing():
     assert transport.created[0]["language_hints"] == ["zh"]
     assert transport.created[0]["max_prompt_audio_length"] == 20.0
     assert transport.created[0]["enable_preprocess"] is True
+
+
+def test_aliyun_cosyvoice_get_or_create_from_file_uploads_when_missing(tmp_path):
+    class EmptyListTransport(FakeCosyVoiceTransport):
+        def list_voices(self, **kwargs):
+            self.lists.append(kwargs)
+            return []
+
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"fake-wav")
+    transport = EmptyListTransport()
+    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+
+    result = clone.get_or_create_voice_from_file(
+        sample,
+        language_hints=["zh"],
+        max_prompt_audio_length=10.0,
+        enable_preprocess=False,
+    )
+
+    assert result.voice_id == "myvoice-prefix-001"
+    assert result.reused is False
+    assert result.audio_url == "https://dashscope-file.example/sample.wav"
+    assert result.prefix == clone.default_prefix_for_file(sample)
+    assert transport.uploads[0]["file_path"] == sample
+    assert transport.uploads[0]["purpose"] == "fine-tune"
+    assert transport.files[0]["file_id"] == "file-1"
+    assert transport.created[0]["audio_url"] == "https://dashscope-file.example/sample.wav"
+    assert transport.created[0]["max_prompt_audio_length"] == 10.0
+    assert transport.created[0]["enable_preprocess"] is False
+
+
+def test_aliyun_cosyvoice_get_or_create_from_file_reuses_without_upload(tmp_path):
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"fake-wav")
+    transport = FakeCosyVoiceTransport()
+    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+
+    result = clone.get_or_create_voice_from_file(sample, prefix="myvoice")
+
+    assert result.voice_id == "myvoice-prefix-001"
+    assert result.reused is True
+    assert transport.lists[0]["prefix"] == "myvoice"
+    assert transport.uploads == []
+    assert transport.created == []
 
 
 def test_aliyun_cosyvoice_wait_until_ready_returns_ok():

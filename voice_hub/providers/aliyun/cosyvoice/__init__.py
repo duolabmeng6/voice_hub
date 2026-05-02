@@ -9,6 +9,7 @@ from .models import (
     ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
     AliyunCosyVoiceEnrollmentResult,
     AliyunCosyVoiceRequest,
+    AliyunCosyVoiceUploadedFile,
 )
 from .transport import AliyunCosyVoiceSDKTransport
 from .tts import AliyunCosyVoiceTTS
@@ -36,4 +37,5 @@ __all__ = [
     "AliyunCosyVoiceSDKTransport",
     "AliyunCosyVoiceSpec",
     "AliyunCosyVoiceTTS",
+    "AliyunCosyVoiceUploadedFile",
 ]

@@ -16,6 +16,7 @@ from .cosyvoice import (
     AliyunCosyVoiceSDKTransport,
     AliyunCosyVoiceSpec,
     AliyunCosyVoiceTTS,
+    AliyunCosyVoiceUploadedFile,
 )
 from .qwen_tts import (
     ALIYUN_BASE_URL,
@@ -55,6 +56,7 @@ __all__ = [
     "AliyunCosyVoiceSDKTransport",
     "AliyunCosyVoiceSpec",
     "AliyunCosyVoiceTTS",
+    "AliyunCosyVoiceUploadedFile",
     "AliyunHTTPTransport",
     "AliyunRequest",
     "AliyunTTS",

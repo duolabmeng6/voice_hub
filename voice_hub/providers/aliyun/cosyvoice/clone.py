@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+from pathlib import Path
 from typing import Mapping
 
 from ....errors import ConfigurationError, ProviderError
@@ -11,6 +12,7 @@ from .models import (
     ALIYUN_COSYVOICE_HTTP_BASE_URL,
     ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
     AliyunCosyVoiceEnrollmentResult,
+    AliyunCosyVoiceUploadedFile,
 )
 from .transport import AliyunCosyVoiceSDKTransport
 from .tts import AliyunCosyVoiceTTS
@@ -103,6 +105,84 @@ class AliyunCosyVoiceClone:
             enable_preprocess=enable_preprocess,
         )
 
+    def get_or_create_voice_from_file(
+        self,
+        file_path: str | Path,
+        *,
+        prefix: str | None = None,
+        language_hints: list[str] | None = None,
+        max_prompt_audio_length: float | None = None,
+        enable_preprocess: bool | None = None,
+        purpose: str = "fine-tune",
+        reusable_statuses: tuple[str, ...] = ("OK", "DEPLOYING"),
+    ) -> AliyunCosyVoiceEnrollmentResult:
+        path = Path(file_path)
+        final_prefix = prefix or self.default_prefix_for_file(path)
+        existing = self.find_reusable_voice(
+            prefix=final_prefix,
+            reusable_statuses=reusable_statuses,
+        )
+        if existing is not None:
+            voice_id = str(existing["voice_id"])
+            return AliyunCosyVoiceEnrollmentResult(
+                voice_id=voice_id,
+                request_id=_optional_str(existing.get("request_id")),
+                target_model=_optional_str(existing.get("target_model")) or self.target_model,
+                prefix=final_prefix,
+                audio_url=_optional_str(existing.get("resource_link")) or "",
+                reused=True,
+                status=_optional_str(existing.get("status")),
+            )
+
+        uploaded = self.upload_file(path, purpose=purpose)
+        if not uploaded.url:
+            raise ProviderError(f"Aliyun uploaded file missing url: {uploaded}")
+        return self.create_voice(
+            audio_url=uploaded.url,
+            prefix=final_prefix,
+            language_hints=language_hints,
+            max_prompt_audio_length=max_prompt_audio_length,
+            enable_preprocess=enable_preprocess,
+        )
+
+    def upload_file(
+        self,
+        file_path: str | Path,
+        *,
+        purpose: str = "fine-tune",
+    ) -> AliyunCosyVoiceUploadedFile:
+        response = self.transport.upload_file(
+            api_key=self.api_key,
+            file_path=file_path,
+            purpose=purpose,
+            http_base_url=self.http_base_url,
+            timeout=self.timeout,
+        )
+        request_id = _optional_str(response.get("request_id"))
+        uploaded = _first_uploaded_file(response)
+        file_id = uploaded.get("file_id")
+        name = uploaded.get("name")
+        if not isinstance(file_id, str) or not isinstance(name, str):
+            raise ProviderError(f"Aliyun file upload returned invalid response: {response}")
+
+        file_info = self.transport.get_file(
+            api_key=self.api_key,
+            file_id=file_id,
+            http_base_url=self.http_base_url,
+            timeout=self.timeout,
+        )
+        data = file_info.get("data")
+        if not isinstance(data, Mapping):
+            raise ProviderError(f"Aliyun file query returned invalid response: {file_info}")
+        return AliyunCosyVoiceUploadedFile(
+            file_id=file_id,
+            name=name,
+            size=_optional_int(data.get("size")),
+            md5=_optional_str(data.get("md5")),
+            url=_optional_str(data.get("url")),
+            request_id=request_id or _optional_str(file_info.get("request_id")),
+        )
+
     def find_reusable_voice(
         self,
         *,
@@ -127,6 +207,14 @@ class AliyunCosyVoiceClone:
     def default_prefix(self, audio_url: str) -> str:
         digest = hashlib.md5(f"{self.target_model}:{audio_url}".encode("utf-8")).hexdigest()
         return f"vh{digest[:8]}"
+
+    def default_prefix_for_file(self, file_path: str | Path) -> str:
+        path = Path(file_path)
+        digest = hashlib.md5()
+        digest.update(self.target_model.encode("utf-8"))
+        digest.update(b":")
+        digest.update(path.read_bytes())
+        return f"vh{digest.hexdigest()[:8]}"
 
     def query_voice(self, voice_id: str) -> Mapping[str, object]:
         return self.transport.query_voice(
@@ -203,3 +291,20 @@ class AliyunCosyVoiceClone:
 
 def _optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _first_uploaded_file(response: Mapping[str, object]) -> Mapping[str, object]:
+    data = response.get("data")
+    if not isinstance(data, Mapping):
+        raise ProviderError(f"Aliyun file upload missing data: {response}")
+    uploaded_files = data.get("uploaded_files")
+    if not isinstance(uploaded_files, list) or not uploaded_files:
+        raise ProviderError(f"Aliyun file upload returned no uploaded files: {response}")
+    first = uploaded_files[0]
+    if not isinstance(first, Mapping):
+        raise ProviderError(f"Aliyun file upload returned invalid file item: {response}")
+    return first

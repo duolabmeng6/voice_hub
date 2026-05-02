@@ -150,7 +150,20 @@ tts = clone.tts(result.voice_id)
 tts.speak("How is the weather today?").save("./tmp/cosyvoice-clone.mp3")
 ```
 
+也可以直接传本地文件，内部会先上传到百炼文件管理服务，拿到临时 URL 后再复刻：
+
+```python
+result = clone.get_or_create_voice_from_file(
+    "./tmp/voice-clones/vc30.wav",
+    language_hints=["zh"],
+)
+clone.wait_until_ready(result.voice_id)
+clone.tts(result.voice_id).speak("恭喜，已成功复刻并合成了属于自己的声音。")
+```
+
 `get_or_create_voice` 默认使用 `target_model + audio_url` 的 MD5 派生 10 位以内前缀，并先按前缀查询已有音色；已有 `OK` 或 `DEPLOYING` 音色时复用，没有才创建，避免频繁创建占用音色配额。也可以显式传入 `prefix`。
+
+`get_or_create_voice_from_file` 默认使用 `target_model + 文件内容` 的 MD5 派生前缀，因此同一个本地音频会优先复用已有音色，不会每次上传后重复创建。
 
 `cosyvoice-v3.5-flash` 当前用于声音复刻/设计，不支持系统音色；系统音色默认使用 `cosyvoice-v3-flash`。
 

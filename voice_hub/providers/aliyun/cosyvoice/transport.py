@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Mapping
 
 from ....errors import ConfigurationError, ProviderError
@@ -180,6 +182,52 @@ class AliyunCosyVoiceSDKTransport:
 
         return _safe_call(service, "get_last_request_id")
 
+    def upload_file(
+        self,
+        *,
+        api_key: str,
+        file_path: str | Path,
+        purpose: str,
+        http_base_url: str,
+        timeout: float,
+    ) -> Mapping[str, Any]:
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(str(path))
+
+        boundary = "----voicehub-aliyun-cosyvoice-file"
+        body = _encode_multipart_form(
+            boundary=boundary,
+            fields={"purpose": purpose},
+            file_field="file",
+            file_path=path,
+        )
+        request = urllib.request.Request(
+            f"{http_base_url.rstrip('/')}/files",
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+        )
+        return self._open_json(request, timeout, "Aliyun file upload failed")
+
+    def get_file(
+        self,
+        *,
+        api_key: str,
+        file_id: str,
+        http_base_url: str,
+        timeout: float,
+    ) -> Mapping[str, Any]:
+        request = urllib.request.Request(
+            f"{http_base_url.rstrip('/')}/files/{file_id}",
+            method="GET",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        return self._open_json(request, timeout, "Aliyun file query failed")
+
     @staticmethod
     def _customization_request(
         *,
@@ -220,6 +268,61 @@ class AliyunCosyVoiceSDKTransport:
         if not isinstance(data, Mapping):
             raise ProviderError(f"{error_prefix}: invalid response")
         return data
+
+    @staticmethod
+    def _open_json(request: urllib.request.Request, timeout: float, error_prefix: str) -> Mapping[str, Any]:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw_body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise ProviderError(f"{error_prefix}: HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise ProviderError(f"{error_prefix}: {exc.reason}") from exc
+
+        try:
+            data = json.loads(raw_body)
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"{error_prefix}: invalid JSON response") from exc
+        if not isinstance(data, Mapping):
+            raise ProviderError(f"{error_prefix}: invalid response")
+        return data
+
+
+def _encode_multipart_form(
+    *,
+    boundary: str,
+    fields: Mapping[str, str],
+    file_field: str,
+    file_path: Path,
+) -> bytes:
+    lines: list[bytes] = []
+    for name, value in fields.items():
+        lines.extend(
+            [
+                f"--{boundary}".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"'.encode("utf-8"),
+                b"",
+                value.encode("utf-8"),
+            ]
+        )
+
+    content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+    lines.extend(
+        [
+            f"--{boundary}".encode("utf-8"),
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; '
+                f'filename="{file_path.name}"'
+            ).encode("utf-8"),
+            f"Content-Type: {content_type}".encode("utf-8"),
+            b"",
+            file_path.read_bytes(),
+            f"--{boundary}--".encode("utf-8"),
+            b"",
+        ]
+    )
+    return b"\r\n".join(lines)
 
 
 def _load_dashscope_sdk(format: str, sample_rate: int):
