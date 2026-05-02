@@ -3,7 +3,7 @@
 统一 TTS speaker 管理器。
 
 ```bash
-pip install voice_hub
+pip install duolabmeng6-voice-hub
 ```
 
 ```python
