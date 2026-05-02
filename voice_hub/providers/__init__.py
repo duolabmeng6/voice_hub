@@ -24,6 +24,17 @@ from .aliyun import (
     AliyunVoiceSpec,
 )
 from .azure import AzureTTS
+from .glm import (
+    GLM_BASE_URL,
+    GLM_SYSTEM_VOICE_BY_ID,
+    GLM_SYSTEM_VOICE_IDS,
+    GLM_SYSTEM_VOICES,
+    GLM_TTS_MODEL,
+    GLMHTTPTransport,
+    GLMTTS,
+    GLMVoice,
+    GLMVoiceSpec,
+)
 from .mimo import (
     MIMO_BUILTIN_VOICE_BY_ID,
     MIMO_BUILTIN_VOICE_IDS,
@@ -74,6 +85,15 @@ __all__ = [
     "AliyunVoice",
     "AliyunVoiceSpec",
     "AzureTTS",
+    "GLM_BASE_URL",
+    "GLM_SYSTEM_VOICE_BY_ID",
+    "GLM_SYSTEM_VOICE_IDS",
+    "GLM_SYSTEM_VOICES",
+    "GLM_TTS_MODEL",
+    "GLMHTTPTransport",
+    "GLMTTS",
+    "GLMVoice",
+    "GLMVoiceSpec",
     "MINIMAX_BASE_URL",
     "MINIMAX_SYSTEM_VOICE_BY_ID",
     "MINIMAX_SYSTEM_VOICE_IDS",

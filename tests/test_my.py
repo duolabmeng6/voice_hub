@@ -29,7 +29,8 @@ load_env(Path(__file__).resolve().parents[1] / ".env")
 
 
 live_only = pytest.mark.skipif(
-    os.environ.get("VOICE_HUB_RUN_LIVE_TESTS") != "1",
+    # os.environ.get("VOICE_HUB_RUN_LIVE_TESTS") != "1",
+    False,
     reason="set VOICE_HUB_RUN_LIVE_TESTS=1 to run live provider tests",
 )
 
@@ -42,6 +43,7 @@ def _fail_without_secret(exc: Exception) -> None:
         "MINIMAX_KEY2",
         "MIMO_API_KEY",
         "MIMO_TOKEN_KEY",
+        "ZHIPUAI_API_KEY",
     ):
         secret = os.environ.get(key)
         if secret:
@@ -176,6 +178,34 @@ def test_minimax_voice_clone_preview_only():
     assert speech.metadata["voice_id"].startswith("VoiceHubClone_")
     assert speech.metadata["endpoint"] == "voice_clone"
     assert Path("./tmp/minimax-clone-preview.mp3").exists()
+
+
+@live_only
+def test_glm_tts_system_voice():
+    tts = voice_hub.GLMTTS(
+        api_key=os.environ["ZHIPUAI_API_KEY"],
+        voice=voice_hub.GLMVoice.FEMALE,
+        response_format="wav",
+        watermark_enabled=False,
+        timeout=120,
+    )
+    output = Path("./tmp/glm_tts.wav")
+
+    try:
+        speech = tts.speak("夜深了，城市还没有睡。")
+        saved = speech.save(output)
+    except voice_hub.VoiceHubError as exc:
+        _fail_without_secret(exc)
+
+    print(
+        {
+            "saved": saved,
+            "audio_bytes": len(speech.bytes()),
+            "model": speech.metadata.get("model"),
+            "voice": speech.metadata.get("voice"),
+            "response_format": speech.metadata.get("response_format"),
+        }
+    )
 
 
 @live_only

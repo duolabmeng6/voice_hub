@@ -56,6 +56,38 @@ tts.speaker("龙儿克隆").speak("夜深了，城市还没有睡。").save("./t
 - [MiniMax 语音合成接入流程](docs/minimax-tts.md)
 - [MiMo 语音合成接入流程](docs/mimo-tts.md)
 
+## 智谱 GLM TTS
+
+默认读取 `ZHIPUAI_API_KEY`，直接调用智谱 HTTP API。
+
+```python
+import voice_hub
+
+tts = voice_hub.GLMTTS(
+    voice=voice_hub.GLMVoice.FEMALE,
+    response_format="wav",
+    watermark_enabled=False,
+)
+
+tts.speak("夜深了，城市还没有睡。").save("./tmp/glm.wav")
+```
+
+`watermark_enabled=False` 只对已经在智谱控制台完成去水印开通的账号生效；否则服务端可能仍会返回带显式水印的音频。
+
+当前内置官方系统音色：
+
+```python
+voice_hub.GLM_SYSTEM_VOICE_IDS
+# ("female", "male", "tongtong", "chuichui", "xiaochen", "jam", "kazi", "douji", "luodo")
+```
+
+也可以使用克隆后的 `voice_id`：
+
+```python
+tts = voice_hub.GLMTTS(voice="your_voice_id", response_format="wav")
+tts.to_file("你好，这是使用克隆音色合成的语音。", "./tmp/glm-clone.wav")
+```
+
 ## MiniMax 音色
 
 同步 HTTP 语音合成：
