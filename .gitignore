@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.template
+.pypirc
 
 # Python
 __pycache__/
