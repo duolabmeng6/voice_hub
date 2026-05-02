@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice_hub"
+version = "0.1.0"
+description = "Unified Python TTS speaker manager."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "duolabmeng6", email = "1715109585@qq.com" },
+]
+keywords = ["tts", "speech-synthesis", "voice", "mimo", "xiaomi"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/duolabmeng6/voice_hub"
+Repository = "https://github.com/duolabmeng6/voice_hub"
+Issues = "https://github.com/duolabmeng6/voice_hub/issues"
+
+[tool.setuptools.packages.find]
+include = ["voice_hub*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
