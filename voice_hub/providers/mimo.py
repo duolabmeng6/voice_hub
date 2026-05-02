@@ -149,7 +149,30 @@ class MimoHTTPTransport:
 
 
 class MimoTTS(BaseTTS):
-    """小米 MiMo-V2.5-TTS 系列 provider。"""
+    """小米 MiMo-V2.5-TTS 系列 provider。
+
+    参数:
+        api_key: 小米 MiMo 控制台获取的 API Key，请求时会作为 ``api-key`` 请求头发送。
+        voice: 内置音色 ID，仅 ``mimo-v2.5-tts`` 使用。推荐使用 ``MimoVoice``
+            常量，例如 ``MimoVoice.BINGTANG``、``MimoVoice.CHLOE``；
+            默认 ``mimo_default`` 会随部署集群选择默认音色。
+        style: 自然语言风格指令，会放入 ``role=user`` 消息，用于控制语速、情绪、
+            角色、方言、导演模式等；不会被合成为语音文本本身。
+        format: 输出音频格式。非流式通常使用 ``wav``；流式调用会默认覆盖为
+            ``pcm16``，便于拼接成 24kHz PCM16LE 单声道音频。
+        model: MiMo TTS 模型 ID。内置音色用 ``mimo-v2.5-tts``，文本设计音色用
+            ``mimo-v2.5-tts-voicedesign``，克隆音色用
+            ``mimo-v2.5-tts-voiceclone``。
+        base_url: MiMo OpenAI-compatible API 地址，默认是
+            ``https://api.xiaomimimo.com/v1``；token-plan 等专用地址由调用方显式传入。
+        transport: 自定义 HTTP 传输层，主要用于测试、代理或替换标准库请求实现。
+        timeout: 单次 HTTP 请求超时时间，单位秒。
+        voice_design_prompt: 文本设计音色描述，仅 ``mimo-v2.5-tts-voicedesign`` 必填。
+            建议用 1-4 句描述性别年龄、音色质感、情绪语气、语速节奏等。
+        voice_sample: 克隆音色参考音频，仅 ``mimo-v2.5-tts-voiceclone`` 必填。
+            支持 ``VoiceSample`` 或本地路径字符串，文件需为 mp3 或 wav，编码后大小
+            需符合 MiMo API 限制。
+    """
 
     def __init__(
         self,
@@ -185,6 +208,11 @@ class MimoTTS(BaseTTS):
         format: str = "wav",
         **kwargs: object,
     ) -> "MimoTTS":
+        """创建文本设计音色 provider。
+
+        ``prompt`` 会映射到 ``voice_design_prompt``，用于描述要生成的音色；
+        该模式不使用内置 ``voice``，也不需要参考音频。
+        """
         return cls(
             api_key=api_key,
             style=style,
@@ -203,6 +231,11 @@ class MimoTTS(BaseTTS):
         format: str = "wav",
         **kwargs: object,
     ) -> "MimoTTS":
+        """创建克隆音色 provider。
+
+        ``sample`` 会映射到 ``voice_sample``，用于生成 ``audio.voice`` 的
+        ``data:{MIME_TYPE};base64,...`` 内容；该模式不使用内置音色 ID。
+        """
         return cls(
             api_key=api_key,
             style=style,
