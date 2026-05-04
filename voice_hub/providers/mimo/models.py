@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 
 MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"
+MIMO_CHAT_COMPLETIONS_PATH = "/chat/completions"
 MIMO_TTS_MODEL = "mimo-v2.5-tts"
 MIMO_VOICE_DESIGN_MODEL = "mimo-v2.5-tts-voicedesign"
 MIMO_VOICE_CLONE_MODEL = "mimo-v2.5-tts-voiceclone"

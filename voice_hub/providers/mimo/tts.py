@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping, Protocol
 
 from ...errors import ConfigurationError
 from ...sample import VoiceSample
 from ...speech import Speech
 from ..base import BaseTTS
+from .api import MimoAPI
 from .models import (
     MIMO_BASE_URL,
     MIMO_TTS_MODEL,
@@ -17,7 +18,16 @@ from .models import (
 )
 from .parser import MimoResponseParser
 from .payload import MimoPayloadBuilder
-from .transport import MimoHTTPTransport
+
+
+class MimoAPIClient(Protocol):
+    def tts(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def tts_stream(self, data: Mapping[str, object]) -> Iterable[Mapping[str, Any]]: ...
+
+    def voice_design(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def voice_clone(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
 
 
 class MimoTTS(BaseTTS):
@@ -30,7 +40,7 @@ class MimoTTS(BaseTTS):
         format: 输出音频格式。流式调用默认覆盖为 ``pcm16``。
         model: MiMo TTS 模型 ID。
         base_url: MiMo OpenAI-compatible API 地址。
-        transport: 自定义 HTTP 传输层，主要用于测试、代理或替换标准库请求实现。
+        api: 自定义 MiMo API 客户端，主要用于测试、代理或替换请求实现。
         timeout: 单次 HTTP 请求超时时间，单位秒。
         voice_design_prompt: 文本设计音色描述，仅文本设计音色模型必填。
         voice_sample: 克隆音色参考音频，仅克隆音色模型必填。
@@ -44,10 +54,10 @@ class MimoTTS(BaseTTS):
         format: str = "wav",
         model: str = MIMO_TTS_MODEL,
         base_url: str = MIMO_BASE_URL,
-        transport: MimoHTTPTransport | None = None,
         timeout: float = 60,
         voice_design_prompt: str | None = None,
         voice_sample: VoiceSample | str | None = None,
+        api: MimoAPIClient | None = None,
     ) -> None:
         self.api_key = api_key
         self.voice = voice
@@ -55,23 +65,19 @@ class MimoTTS(BaseTTS):
         self.format = format
         self.model = model
         self.base_url = base_url
-        self.transport = transport or MimoHTTPTransport()
         self.timeout = timeout
         self.voice_design_prompt = voice_design_prompt
         self.voice_sample = self._normalize_sample(voice_sample)
         self._parser = MimoResponseParser()
         self._validate_config()
+        self.api = api or MimoAPI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
 
     def speak(self, text: str, **overrides: object) -> Speech:
         """合成语音并返回音频结果。"""
         request = self.build_request(text, stream=False, **overrides)
+        data = request.to_payload()
         start = time.monotonic()
-        response = self.transport.post(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        response = self._call_api(request.model, data, stream=False)
         audio = self._parser.decode_message_audio(response)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         return Speech(
@@ -84,7 +90,7 @@ class MimoTTS(BaseTTS):
                 "model": request.model,
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
-                "payload": _redact_payload(request.to_payload()),
+                "payload": _redact_payload(data),
             },
         )
 
@@ -159,12 +165,8 @@ class MimoTTS(BaseTTS):
         stream_overrides.setdefault("format", "pcm16")
 
         request = self.build_request(text, stream=True, **stream_overrides)
-        events = self.transport.stream(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        data = request.to_payload()
+        events = self._call_api(request.model, data, stream=True)
         return self._parser.iter_audio_chunks(events)
 
     @staticmethod
@@ -182,6 +184,21 @@ class MimoTTS(BaseTTS):
             voice_design_prompt=self.voice_design_prompt,
             voice_sample=self.voice_sample,
         )
+
+    def _call_api(
+        self,
+        model: str,
+        data: Mapping[str, object],
+        *,
+        stream: bool = False,
+    ) -> Any:
+        if stream:
+            return self.api.tts_stream(data)
+        if model == MIMO_VOICE_DESIGN_MODEL:
+            return self.api.voice_design(data)
+        if model == MIMO_VOICE_CLONE_MODEL:
+            return self.api.voice_clone(data)
+        return self.api.tts(data)
 
     def _validate_config(self) -> None:
         if not self.api_key or not self.api_key.strip():

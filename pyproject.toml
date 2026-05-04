@@ -24,7 +24,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []
+dependencies = [
+    "requests>=2.31",
+]
 
 [project.urls]
 Homepage = "https://github.com/duolabmeng6/voice_hub"
