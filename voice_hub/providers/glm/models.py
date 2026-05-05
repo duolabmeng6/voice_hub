@@ -5,6 +5,8 @@ from typing import Mapping
 
 
 GLM_TTS_MODEL = "glm-tts"
+GLM_API_ROOT_URL = "https://open.bigmodel.cn/api/paas/v4"
+GLM_AUDIO_SPEECH_PATH = "/audio/speech"
 GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/audio/speech"
 
 

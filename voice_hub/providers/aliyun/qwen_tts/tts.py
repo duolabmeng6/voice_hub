@@ -3,16 +3,24 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, Mapping, Protocol
 
 from ....errors import ConfigurationError
 from ....speech import Speech
 from ...base import BaseTTS
+from .api import AliyunQwenTTSAPI
 from .models import ALIYUN_BASE_URL, ALIYUN_QWEN_TTS_MODEL, AliyunRequest
 from .parser import AliyunResponseParser
 from .payload import AliyunPayloadBuilder
-from .transport import AliyunHTTPTransport
 from .voices import AliyunVoice
+
+
+class AliyunQwenTTSAPIClient(Protocol):
+    def generation(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def generation_stream(self, data: Mapping[str, object]) -> Iterable[Mapping[str, Any]]: ...
+
+    def download_url(self, url: str) -> bytes: ...
 
 
 class AliyunTTS(BaseTTS):
@@ -26,7 +34,7 @@ class AliyunTTS(BaseTTS):
         instructions: 指令控制，仅 ``qwen3-tts-instruct-flash`` 支持。
         optimize_instructions: 是否让模型优化指令表达。
         base_url: DashScope generation endpoint；默认北京地域。
-        transport: 自定义 HTTP 传输层，主要用于测试、代理或替换标准库请求实现。
+        api: 自定义阿里云 Qwen TTS API 客户端，主要用于测试、代理或替换请求实现。
         timeout: 单次 HTTP 请求和音频下载超时时间，单位秒。
     """
 
@@ -39,7 +47,7 @@ class AliyunTTS(BaseTTS):
         instructions: str | None = None,
         optimize_instructions: bool = False,
         base_url: str = ALIYUN_BASE_URL,
-        transport: AliyunHTTPTransport | None = None,
+        api: AliyunQwenTTSAPIClient | None = None,
         timeout: float = 60,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.environ.get("DASHSCOPE_API_KEY", "")
@@ -49,7 +57,7 @@ class AliyunTTS(BaseTTS):
         self.instructions = instructions
         self.optimize_instructions = optimize_instructions
         self.base_url = base_url
-        self.transport = transport or AliyunHTTPTransport()
+        self.api = api or AliyunQwenTTSAPI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
         self.timeout = timeout
         self._parser = AliyunResponseParser()
         self._validate_config()
@@ -57,15 +65,11 @@ class AliyunTTS(BaseTTS):
     def speak(self, text: str, **overrides: object) -> Speech:
         """合成语音、下载返回的音频 URL，并返回音频结果。"""
         request = self.build_request(text, **overrides)
+        data = request.to_payload()
         start = time.monotonic()
-        response = self.transport.post(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        response = self.api.generation(data)
         audio_url = self._parser.audio_url(response)
-        audio = self.transport.download_url(audio_url, self.timeout)
+        audio = self.api.download_url(audio_url)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         return Speech(
             audio,
@@ -80,7 +84,7 @@ class AliyunTTS(BaseTTS):
                 "audio_url": audio_url,
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
-                "payload": request.to_payload(),
+                "payload": data,
             },
         )
 
@@ -107,12 +111,7 @@ class AliyunTTS(BaseTTS):
     def stream(self, text: str, **overrides: object) -> Iterable[bytes]:
         """使用 DashScope SSE 流式合成，返回 Base64 解码后的音频分片。"""
         request = self.build_request(text, **overrides)
-        events = self.transport.stream(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        events = self.api.generation_stream(request.to_payload())
         return self._parser.iter_audio_chunks(events)
 
     def stream_synthesize(self, text: str, **overrides: object) -> Iterable[bytes]:

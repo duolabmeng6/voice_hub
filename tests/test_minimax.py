@@ -2,7 +2,6 @@ import pytest
 
 import voice_hub
 from voice_hub.providers.minimax import (
-    MINIMAX_BASE_URL,
     MINIMAX_SYSTEM_VOICE_BY_ID,
     MINIMAX_SYSTEM_VOICE_IDS,
     MINIMAX_SYSTEM_VOICES,
@@ -16,13 +15,16 @@ from voice_hub.providers.minimax import (
 )
 
 
-class FakeTransport:
+class FakeMinimaxAPI:
     def __init__(self):
-        self.posts = []
-        self.streams = []
+        self.t2a_calls = []
+        self.stream_calls = []
+        self.uploads = []
+        self.voice_clone_calls = []
+        self.downloads = []
 
-    def post(self, base_url, api_key, payload, timeout):
-        self.posts.append((base_url, api_key, payload, timeout))
+    def t2a_v2(self, data):
+        self.t2a_calls.append(dict(data))
         return {
             "data": {
                 "audio": b"audio-bytes".hex(),
@@ -40,8 +42,8 @@ class FakeTransport:
             },
         }
 
-    def stream(self, base_url, api_key, payload, timeout):
-        self.streams.append((base_url, api_key, payload, timeout))
+    def t2a_v2_stream(self, data):
+        self.stream_calls.append(dict(data))
         return [
             {
                 "data": {
@@ -66,23 +68,16 @@ class FakeTransport:
             },
         ]
 
-
-class FakeVoiceCloneTransport:
-    def __init__(self):
-        self.uploads = []
-        self.clones = []
-        self.posts = []
-        self.streams = []
-
-    def upload_file(self, base_url, api_key, file_path, purpose, timeout):
-        self.uploads.append((base_url, api_key, file_path, purpose, timeout))
+    def upload_file(self, file_path, purpose):
+        self.uploads.append((file_path, purpose))
         return {
             "file": {"file_id": f"file-{purpose}"},
             "base_resp": {"status_code": 0, "status_msg": "success"},
         }
 
-    def voice_clone(self, base_url, api_key, payload, timeout):
-        self.clones.append((base_url, api_key, payload, timeout))
+    def voice_clone(self, data):
+        payload = dict(data)
+        self.voice_clone_calls.append(payload)
         return {
             "voice_id": payload["voice_id"],
             "demo_audio": "https://filecdn.minimax.chat/public/demo.mp3",
@@ -90,16 +85,9 @@ class FakeVoiceCloneTransport:
             "trace_id": "clone-trace",
         }
 
-    def download_url(self, url, timeout):
+    def download_url(self, url):
+        self.downloads.append(url)
         return b"demo-audio-bytes"
-
-    def post(self, base_url, api_key, payload, timeout):
-        self.posts.append((base_url, api_key, payload, timeout))
-        raise AssertionError("voice clone must not call t2a post")
-
-    def stream(self, base_url, api_key, payload, timeout):
-        self.streams.append((base_url, api_key, payload, timeout))
-        raise AssertionError("voice clone must not call t2a stream")
 
 
 def test_minimax_builtin_voice_constants():
@@ -134,12 +122,12 @@ def test_minimax_system_voice_specs_match_docs():
 
 
 def test_minimax_non_stream_payload_and_response():
-    transport = FakeTransport()
+    api = FakeMinimaxAPI()
     tts = MinimaxTTS(
         api_key="key",
         voice=MinimaxVoice.MALE_QN_QINGSE,
         emotion="happy",
-        transport=transport,
+        api=api,
     )
 
     speech = tts.speak("今天是不是很开心呀(laughs)，当然了！")
@@ -148,55 +136,52 @@ def test_minimax_non_stream_payload_and_response():
     assert speech.metadata["provider"] == "MinimaxTTS"
     assert speech.metadata["trace_id"] == "trace-1"
 
-    base_url, api_key, payload, timeout = transport.posts[0]
-    assert base_url == MINIMAX_BASE_URL
-    assert api_key == "key"
-    assert timeout == 60
-    assert payload == {
-        "model": MINIMAX_T2A_MODEL,
-        "text": "今天是不是很开心呀(laughs)，当然了！",
-        "stream": False,
-        "voice_setting": {
-            "voice_id": "male-qn-qingse",
-            "speed": 1.0,
-            "vol": 1.0,
-            "pitch": 0,
-            "emotion": "happy",
-            "text_normalization": False,
-            "latex_read": False,
-        },
-        "audio_setting": {
-            "sample_rate": 32000,
-            "bitrate": 128000,
-            "format": "mp3",
-            "channel": 1,
-            "force_cbr": False,
-        },
-        "subtitle_enable": False,
-        "output_format": "hex",
-        "aigc_watermark": False,
-    }
-
+    assert api.t2a_calls == [
+        {
+            "model": MINIMAX_T2A_MODEL,
+            "text": "今天是不是很开心呀(laughs)，当然了！",
+            "stream": False,
+            "voice_setting": {
+                "voice_id": "male-qn-qingse",
+                "speed": 1.0,
+                "vol": 1.0,
+                "pitch": 0,
+                "emotion": "happy",
+                "text_normalization": False,
+                "latex_read": False,
+            },
+            "audio_setting": {
+                "sample_rate": 32000,
+                "bitrate": 128000,
+                "format": "mp3",
+                "channel": 1,
+                "force_cbr": False,
+            },
+            "subtitle_enable": False,
+            "output_format": "hex",
+            "aigc_watermark": False,
+        }
+    ]
 
 def test_minimax_build_payload_does_not_send_request():
-    transport = FakeTransport()
-    tts = MinimaxTTS(api_key="key", voice=MinimaxVoice.ENGLISH_GRACEFUL_LADY, transport=transport)
+    api = FakeMinimaxAPI()
+    tts = MinimaxTTS(api_key="key", voice=MinimaxVoice.ENGLISH_GRACEFUL_LADY, api=api)
 
     payload = tts.build_payload("hello", speed=1.2, language_boost="English")
 
-    assert transport.posts == []
+    assert api.t2a_calls == []
     assert payload["voice_setting"]["voice_id"] == "English_Graceful_Lady"
     assert payload["voice_setting"]["speed"] == 1.2
     assert payload["language_boost"] == "English"
 
 
 def test_minimax_stream_returns_chunks():
-    transport = FakeTransport()
-    tts = MinimaxTTS(api_key="key", format="mp3", transport=transport)
+    api = FakeMinimaxAPI()
+    tts = MinimaxTTS(api_key="key", format="mp3", api=api)
 
     assert list(tts.stream("你好")) == [b"chunk-1", b"chunk-2"]
 
-    payload = transport.streams[0][2]
+    payload = api.stream_calls[0]
     assert payload["stream"] is True
     assert payload["audio_setting"]["format"] == "mp3"
     assert "output_format" not in payload
@@ -204,31 +189,28 @@ def test_minimax_stream_returns_chunks():
 
 def test_minimax_reads_default_api_key_from_env(monkeypatch):
     monkeypatch.setenv("MINIMAX_KEY", "env-key")
-    transport = FakeTransport()
-    tts = MinimaxTTS(transport=transport)
+    tts = MinimaxTTS()
 
-    tts.bytes("你好")
-
-    assert transport.posts[0][1] == "env-key"
+    assert tts.api.api_key == "env-key"
 
 
 def test_minimax_rejects_unknown_override():
-    tts = MinimaxTTS(api_key="key", transport=FakeTransport())
+    tts = MinimaxTTS(api_key="key", api=FakeMinimaxAPI())
 
     with pytest.raises(TypeError, match="unsupported MiniMax override"):
         tts.bytes("你好", temperature=0.8)
 
 
 def test_minimax_rejects_stream_wav():
-    tts = MinimaxTTS(api_key="key", format="wav", transport=FakeTransport())
+    tts = MinimaxTTS(api_key="key", format="wav", api=FakeMinimaxAPI())
 
     with pytest.raises(voice_hub.ConfigurationError, match="stream does not support wav"):
         list(tts.stream("你好"))
 
 
 def test_minimax_raises_provider_error_for_base_resp():
-    class ErrorTransport(FakeTransport):
-        def post(self, base_url, api_key, payload, timeout):
+    class ErrorAPI(FakeMinimaxAPI):
+        def t2a_v2(self, data):
             return {
                 "data": None,
                 "trace_id": "trace-error",
@@ -238,7 +220,7 @@ def test_minimax_raises_provider_error_for_base_resp():
                 },
             }
 
-    tts = MinimaxTTS(api_key="key", transport=ErrorTransport())
+    tts = MinimaxTTS(api_key="key", api=ErrorAPI())
 
     with pytest.raises(voice_hub.ProviderError, match="status_code=2013"):
         tts.bytes("你好")
@@ -248,15 +230,13 @@ def test_minimax_voice_clone_reads_key2_and_uploads(tmp_path, monkeypatch):
     monkeypatch.setenv("MINIMAX_KEY2", "clone-key")
     sample = tmp_path / "clone.wav"
     sample.write_bytes(b"fake-wav")
-    transport = FakeVoiceCloneTransport()
-    client = MinimaxVoiceClone(transport=transport)
+    api = FakeMinimaxAPI()
+    client = MinimaxVoiceClone(api=api)
 
     file_id = client.upload_clone_audio(sample)
 
     assert file_id == "file-voice_clone"
-    assert transport.uploads == [
-        (MINIMAX_BASE_URL, "clone-key", sample, "voice_clone", 120),
-    ]
+    assert api.uploads == [(sample, "voice_clone")]
 
 
 def test_minimax_voice_clone_from_file_builds_preview_payload(tmp_path):
@@ -264,8 +244,8 @@ def test_minimax_voice_clone_from_file_builds_preview_payload(tmp_path):
     sample.write_bytes(b"fake-mp3")
     prompt = tmp_path / "prompt.m4a"
     prompt.write_bytes(b"fake-m4a")
-    transport = FakeVoiceCloneTransport()
-    client = MinimaxVoiceClone(api_key="clone-key", transport=transport)
+    api = FakeMinimaxAPI()
+    client = MinimaxVoiceClone(api_key="clone-key", api=api)
 
     result = client.clone_from_file(
         sample,
@@ -280,11 +260,11 @@ def test_minimax_voice_clone_from_file_builds_preview_payload(tmp_path):
     assert result.voice_id == "VoiceHubClone01"
     assert result.file_id == "file-voice_clone"
     assert result.demo_audio_url == "https://filecdn.minimax.chat/public/demo.mp3"
-    assert len(transport.uploads) == 2
-    assert transport.uploads[0][3] == "voice_clone"
-    assert transport.uploads[1][3] == "prompt_audio"
+    assert len(api.uploads) == 2
+    assert api.uploads[0][1] == "voice_clone"
+    assert api.uploads[1][1] == "prompt_audio"
 
-    payload = transport.clones[0][2]
+    payload = api.voice_clone_calls[0]
     assert payload == {
         "file_id": "file-voice_clone",
         "voice_id": "VoiceHubClone01",
@@ -298,12 +278,12 @@ def test_minimax_voice_clone_from_file_builds_preview_payload(tmp_path):
         },
         "language_boost": "Chinese",
     }
-    assert transport.posts == []
-    assert transport.streams == []
+    assert api.t2a_calls == []
+    assert api.stream_calls == []
 
 
 def test_minimax_voice_clone_payload_accepts_prompt_object():
-    client = MinimaxVoiceClone(api_key="clone-key", transport=FakeVoiceCloneTransport())
+    client = MinimaxVoiceClone(api_key="clone-key", api=FakeMinimaxAPI())
 
     payload = client.build_clone_payload(
         file_id=123,
@@ -316,7 +296,7 @@ def test_minimax_voice_clone_payload_accepts_prompt_object():
 
 
 def test_minimax_voice_clone_rejects_invalid_voice_id():
-    client = MinimaxVoiceClone(api_key="clone-key", transport=FakeVoiceCloneTransport())
+    client = MinimaxVoiceClone(api_key="clone-key", api=FakeMinimaxAPI())
 
     with pytest.raises(voice_hub.ConfigurationError, match="voice_id"):
         client.build_clone_payload(file_id=1, voice_id="bad_", text="hello")
@@ -335,11 +315,11 @@ def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
     sample = tmp_path / "clone.wav"
     sample.write_bytes(b"fake-wav")
     output = tmp_path / "minimax.mp3"
-    transport = FakeVoiceCloneTransport()
+    api = FakeMinimaxAPI()
     tts = MinimaxTTS.cloned(
         api_key="clone-key",
         sample=voice_hub.VoiceSample(sample),
-        transport=transport,
+        api=api,
         language_boost="Chinese",
     )
 
@@ -347,9 +327,10 @@ def test_minimax_cloned_tts_speak_save_uses_voice_clone_preview(tmp_path):
 
     assert saved_path == str(output)
     assert output.read_bytes() == b"demo-audio-bytes"
-    assert transport.uploads[0][3] == "voice_clone"
-    assert transport.clones[0][2]["text"] == "今天是不是很开心呀(laughs)，当然了！"
-    assert transport.clones[0][2]["voice_id"].startswith("VoiceHubClone_")
-    assert transport.clones[0][2]["language_boost"] == "Chinese"
-    assert transport.posts == []
-    assert transport.streams == []
+    assert api.uploads[0][1] == "voice_clone"
+    assert api.voice_clone_calls[0]["text"] == "今天是不是很开心呀(laughs)，当然了！"
+    assert api.voice_clone_calls[0]["voice_id"].startswith("VoiceHubClone_")
+    assert api.voice_clone_calls[0]["language_boost"] == "Chinese"
+    assert api.downloads == ["https://filecdn.minimax.chat/public/demo.mp3"]
+    assert api.t2a_calls == []
+    assert api.stream_calls == []

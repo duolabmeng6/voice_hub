@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Protocol
 
 from ....errors import ConfigurationError
 from ....speech import Speech
 from ...base import BaseTTS
+from .api import AliyunCosyVoiceAPI
 from .models import (
     ALIYUN_COSYVOICE_CLONE_MODEL,
     ALIYUN_COSYVOICE_HTTP_BASE_URL,
@@ -16,8 +17,11 @@ from .models import (
     AliyunCosyVoiceEnrollmentResult,
     AliyunCosyVoiceRequest,
 )
-from .transport import AliyunCosyVoiceSDKTransport
 from .voices import AliyunCosyVoice
+
+
+class AliyunCosyVoiceTTSAPIClient(Protocol):
+    def synthesize(self, data: Mapping[str, object]) -> tuple[bytes, str | None]: ...
 
 
 class AliyunCosyVoiceTTS(BaseTTS):
@@ -40,7 +44,7 @@ class AliyunCosyVoiceTTS(BaseTTS):
         additional_params: Mapping[str, object] | None = None,
         http_base_url: str = ALIYUN_COSYVOICE_HTTP_BASE_URL,
         websocket_base_url: str = ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
-        transport: AliyunCosyVoiceSDKTransport | None = None,
+        api: AliyunCosyVoiceTTSAPIClient | None = None,
         timeout: float = 60,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.environ.get("DASHSCOPE_API_KEY", "")
@@ -58,33 +62,21 @@ class AliyunCosyVoiceTTS(BaseTTS):
         self.additional_params = additional_params
         self.http_base_url = http_base_url
         self.websocket_base_url = websocket_base_url
-        self.transport = transport or AliyunCosyVoiceSDKTransport()
+        self.api = api or AliyunCosyVoiceAPI(
+            api_key=self.api_key,
+            http_base_url=self.http_base_url,
+            websocket_base_url=self.websocket_base_url,
+            timeout=timeout,
+        )
         self.timeout = timeout
         self.voice_result: AliyunCosyVoiceEnrollmentResult | None = None
         self._validate_config()
 
     def speak(self, text: str, **overrides: object) -> Speech:
         request = self.build_request(text, **overrides)
+        data = request.to_payload()
         start = time.monotonic()
-        audio, request_id = self.transport.synthesize(
-            api_key=self.api_key,
-            model=request.model,
-            voice=request.voice,
-            text=request.text,
-            format=request.format,
-            sample_rate=request.sample_rate,
-            volume=request.volume,
-            speech_rate=request.speech_rate,
-            pitch_rate=request.pitch_rate,
-            seed=request.seed,
-            synthesis_type=request.synthesis_type,
-            instruction=request.instruction,
-            language_hints=request.language_hints,
-            additional_params=request.additional_params,
-            http_base_url=self.http_base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
-        )
+        audio, request_id = self.api.synthesize(data)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         return Speech(
             audio,
@@ -97,7 +89,7 @@ class AliyunCosyVoiceTTS(BaseTTS):
                 "request_id": request_id,
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
-                "payload": request.to_payload(),
+                "payload": data,
                 "voice_result": self.voice_result,
             },
         )
@@ -120,7 +112,7 @@ class AliyunCosyVoiceTTS(BaseTTS):
         sample_rate: int = 24000,
         http_base_url: str = ALIYUN_COSYVOICE_HTTP_BASE_URL,
         websocket_base_url: str = ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
-        transport: AliyunCosyVoiceSDKTransport | None = None,
+        api: AliyunCosyVoiceTTSAPIClient | None = None,
         timeout: float = 120,
         **kwargs: object,
     ) -> "AliyunCosyVoiceTTS":
@@ -137,7 +129,7 @@ class AliyunCosyVoiceTTS(BaseTTS):
             target_model=model,
             http_base_url=http_base_url,
             websocket_base_url=websocket_base_url,
-            transport=transport,
+            api=api,
             timeout=timeout,
         )
         if sample is not None:

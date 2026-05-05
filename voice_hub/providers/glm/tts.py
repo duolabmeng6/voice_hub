@@ -3,14 +3,18 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Protocol
 
 from ...errors import ConfigurationError
 from ...speech import Speech
 from ..base import BaseTTS
+from .api import GLMAPI
 from .models import GLM_BASE_URL, GLM_TTS_MODEL, GLMRequest, GLMVoice
 from .payload import GLMPayloadBuilder
-from .transport import GLMHTTPTransport
+
+
+class GLMAPIClient(Protocol):
+    def speech(self, data: Mapping[str, object]) -> bytes: ...
 
 
 class GLMTTS(BaseTTS):
@@ -22,7 +26,7 @@ class GLMTTS(BaseTTS):
         model: GLM TTS 模型 ID，默认 ``glm-tts``。
         response_format: 输出音频格式，默认 ``wav``。
         base_url: 智谱语音合成 API 地址。
-        transport: 自定义 HTTP 传输层，主要用于测试、代理或替换标准库请求实现。
+        api: 自定义 GLM API 客户端，主要用于测试、代理或替换请求实现。
         timeout: 单次请求超时时间，单位秒。
     """
 
@@ -37,7 +41,7 @@ class GLMTTS(BaseTTS):
         encode_format: str | None = None,
         watermark_enabled: bool | None = None,
         base_url: str = GLM_BASE_URL,
-        transport: GLMHTTPTransport | None = None,
+        api: GLMAPIClient | None = None,
         timeout: float = 60,
         sensitive_word_check: object | None = None,
         request_id: str | None = None,
@@ -53,7 +57,7 @@ class GLMTTS(BaseTTS):
         self.encode_format = encode_format
         self.watermark_enabled = watermark_enabled
         self.base_url = base_url
-        self.transport = transport or GLMHTTPTransport()
+        self.api = api or GLMAPI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
         self.timeout = timeout
         self.sensitive_word_check = sensitive_word_check
         self.request_id = request_id
@@ -63,13 +67,9 @@ class GLMTTS(BaseTTS):
 
     def speak(self, text: str, **overrides: object) -> Speech:
         request = self.build_request(text, **overrides)
+        data = request.to_payload()
         start = time.monotonic()
-        audio = self.transport.synthesize(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            request=request,
-            timeout=self.timeout,
-        )
+        audio = self.api.speech(data)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         return Speech(
             audio,
@@ -84,7 +84,7 @@ class GLMTTS(BaseTTS):
                 "request_id": request.request_id,
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
-                "payload": request.to_payload(),
+                "payload": data,
             },
         )
 

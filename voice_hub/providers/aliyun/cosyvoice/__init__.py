@@ -1,9 +1,11 @@
 """阿里云 CosyVoice provider public API。"""
 
+from .api import AliyunCosyVoiceAPI, AliyunCosyVoiceBaseAPI
 from .clone import AliyunCosyVoiceClone
 from .models import (
     ALIYUN_COSYVOICE_CLONE_MODEL,
     ALIYUN_COSYVOICE_ENROLLMENT_MODEL,
+    ALIYUN_COSYVOICE_FILES_PATH,
     ALIYUN_COSYVOICE_HTTP_BASE_URL,
     ALIYUN_COSYVOICE_MODEL,
     ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
@@ -11,7 +13,6 @@ from .models import (
     AliyunCosyVoiceRequest,
     AliyunCosyVoiceUploadedFile,
 )
-from .transport import AliyunCosyVoiceSDKTransport
 from .tts import AliyunCosyVoiceTTS
 from .voices import (
     ALIYUN_COSYVOICE_SYSTEM_VOICE_BY_ID,
@@ -24,6 +25,7 @@ from .voices import (
 __all__ = [
     "ALIYUN_COSYVOICE_CLONE_MODEL",
     "ALIYUN_COSYVOICE_ENROLLMENT_MODEL",
+    "ALIYUN_COSYVOICE_FILES_PATH",
     "ALIYUN_COSYVOICE_HTTP_BASE_URL",
     "ALIYUN_COSYVOICE_MODEL",
     "ALIYUN_COSYVOICE_SYSTEM_VOICE_BY_ID",
@@ -31,10 +33,11 @@ __all__ = [
     "ALIYUN_COSYVOICE_SYSTEM_VOICES",
     "ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL",
     "AliyunCosyVoice",
+    "AliyunCosyVoiceAPI",
+    "AliyunCosyVoiceBaseAPI",
     "AliyunCosyVoiceClone",
     "AliyunCosyVoiceEnrollmentResult",
     "AliyunCosyVoiceRequest",
-    "AliyunCosyVoiceSDKTransport",
     "AliyunCosyVoiceSpec",
     "AliyunCosyVoiceTTS",
     "AliyunCosyVoiceUploadedFile",

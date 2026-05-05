@@ -13,7 +13,7 @@ from voice_hub.providers.aliyun import (
 )
 
 
-class FakeCosyVoiceTransport:
+class FakeAliyunCosyVoiceAPI:
     def __init__(self):
         self.syntheses = []
         self.created = []
@@ -23,32 +23,35 @@ class FakeCosyVoiceTransport:
         self.uploads = []
         self.files = []
 
-    def synthesize(self, **kwargs):
-        self.syntheses.append(kwargs)
+    def synthesize(self, data):
+        self.syntheses.append(dict(data))
         return b"audio-bytes", "synth-request-1"
 
-    def create_voice(self, **kwargs):
-        self.created.append(kwargs)
-        return "myvoice-prefix-001", "create-request-1"
-
-    def query_voice(self, **kwargs):
-        self.queries.append(kwargs)
+    def create_voice(self, data):
+        self.created.append(dict(data))
         return {
-            "voice_id": kwargs["voice_id"],
+            "output": {"voice_id": "myvoice-prefix-001"},
+            "request_id": "create-request-1",
+        }
+
+    def query_voice(self, voice_id):
+        self.queries.append(voice_id)
+        return {
+            "voice_id": voice_id,
             "status": "OK",
             "request_id": "query-request-1",
         }
 
-    def list_voices(self, **kwargs):
-        self.lists.append(kwargs)
+    def list_voices(self, data):
+        self.lists.append(dict(data))
         return [{"voice_id": "myvoice-prefix-001", "status": "OK"}]
 
-    def delete_voice(self, **kwargs):
-        self.deleted.append(kwargs)
+    def delete_voice(self, voice_id):
+        self.deleted.append(voice_id)
         return "delete-request-1"
 
-    def upload_file(self, **kwargs):
-        self.uploads.append(kwargs)
+    def upload_file(self, file_path, purpose):
+        self.uploads.append((file_path, purpose))
         return {
             "request_id": "upload-request-1",
             "data": {
@@ -62,12 +65,12 @@ class FakeCosyVoiceTransport:
             },
         }
 
-    def get_file(self, **kwargs):
-        self.files.append(kwargs)
+    def get_file(self, file_id):
+        self.files.append(file_id)
         return {
             "request_id": "file-request-1",
             "data": {
-                "file_id": kwargs["file_id"],
+                "file_id": file_id,
                 "name": "sample.wav",
                 "size": 123,
                 "md5": "abc",
@@ -89,12 +92,12 @@ def test_aliyun_cosyvoice_system_voice_constants():
 
 
 def test_aliyun_cosyvoice_system_tts_synthesizes_bytes():
-    transport = FakeCosyVoiceTransport()
+    api = FakeAliyunCosyVoiceAPI()
     tts = AliyunCosyVoiceTTS(
         api_key="key",
         voice=AliyunCosyVoice.LONGANYANG,
         instruction="用活泼自然的语气讲解产品",
-        transport=transport,
+        api=api,
     )
 
     speech = tts.speak("你好，欢迎来到直播间。")
@@ -102,8 +105,7 @@ def test_aliyun_cosyvoice_system_tts_synthesizes_bytes():
     assert speech.bytes() == b"audio-bytes"
     assert speech.metadata["provider"] == "AliyunCosyVoiceTTS"
     assert speech.metadata["request_id"] == "synth-request-1"
-    call = transport.syntheses[0]
-    assert call["api_key"] == "key"
+    call = api.syntheses[0]
     assert call["model"] == ALIYUN_COSYVOICE_MODEL
     assert call["voice"] == "longanyang"
     assert call["text"] == "你好，欢迎来到直播间。"
@@ -113,12 +115,12 @@ def test_aliyun_cosyvoice_system_tts_synthesizes_bytes():
 
 
 def test_aliyun_cosyvoice_build_payload_does_not_send_request():
-    transport = FakeCosyVoiceTransport()
-    tts = AliyunCosyVoiceTTS(api_key="key", transport=transport)
+    api = FakeAliyunCosyVoiceAPI()
+    tts = AliyunCosyVoiceTTS(api_key="key", api=api)
 
     payload = tts.build_payload("hello", speech_rate=1.2, language_hints=["zh", "en"])
 
-    assert transport.syntheses == []
+    assert api.syntheses == []
     assert payload["model"] == ALIYUN_COSYVOICE_MODEL
     assert payload["voice"] == "longanyang"
     assert payload["text"] == "hello"
@@ -128,24 +130,21 @@ def test_aliyun_cosyvoice_build_payload_does_not_send_request():
 
 def test_aliyun_cosyvoice_reads_env_api_key(monkeypatch):
     monkeypatch.setenv("DASHSCOPE_API_KEY", "env-key")
-    transport = FakeCosyVoiceTransport()
-    tts = AliyunCosyVoiceTTS(transport=transport)
+    tts = AliyunCosyVoiceTTS()
 
-    tts.bytes("你好")
-
-    assert transport.syntheses[0]["api_key"] == "env-key"
+    assert tts.api.api_key == "env-key"
 
 
 def test_aliyun_cosyvoice_rejects_unknown_override():
-    tts = AliyunCosyVoiceTTS(api_key="key", transport=FakeCosyVoiceTransport())
+    tts = AliyunCosyVoiceTTS(api_key="key", api=FakeAliyunCosyVoiceAPI())
 
     with pytest.raises(TypeError, match="unsupported Aliyun CosyVoice override"):
         tts.bytes("你好", speed=1.2)
 
 
 def test_aliyun_cosyvoice_clone_create_query_and_tts():
-    transport = FakeCosyVoiceTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = FakeAliyunCosyVoiceAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     result = clone.create_voice(
         audio_url="https://example.com/sample.wav",
@@ -165,17 +164,19 @@ def test_aliyun_cosyvoice_clone_create_query_and_tts():
     assert voices == [{"voice_id": "myvoice-prefix-001", "status": "OK"}]
     assert request_id == "delete-request-1"
     assert speech.bytes() == b"audio-bytes"
-    assert transport.created[0]["target_model"] == ALIYUN_COSYVOICE_CLONE_MODEL
-    assert transport.created[0]["prefix"] == "myvoice"
-    assert transport.created[0]["max_prompt_audio_length"] is None
-    assert transport.created[0]["enable_preprocess"] is None
-    assert transport.syntheses[0]["voice"] == "myvoice-prefix-001"
-    assert transport.syntheses[0]["model"] == ALIYUN_COSYVOICE_CLONE_MODEL
+    assert api.created[0]["model"] == "voice-enrollment"
+    assert api.created[0]["input"]["action"] == "create_voice"
+    assert api.created[0]["input"]["target_model"] == ALIYUN_COSYVOICE_CLONE_MODEL
+    assert api.created[0]["input"]["prefix"] == "myvoice"
+    assert "max_prompt_audio_length" not in api.created[0]["input"]
+    assert "enable_preprocess" not in api.created[0]["input"]
+    assert api.syntheses[0]["voice"] == "myvoice-prefix-001"
+    assert api.syntheses[0]["model"] == ALIYUN_COSYVOICE_CLONE_MODEL
 
 
 def test_aliyun_cosyvoice_get_or_create_reuses_existing_voice():
-    transport = FakeCosyVoiceTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = FakeAliyunCosyVoiceAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     result = clone.get_or_create_voice(
         audio_url="https://example.com/sample.wav",
@@ -185,18 +186,18 @@ def test_aliyun_cosyvoice_get_or_create_reuses_existing_voice():
     assert result.voice_id == "myvoice-prefix-001"
     assert result.reused is True
     assert result.status == "OK"
-    assert transport.lists[0]["prefix"] == "myvoice"
-    assert transport.created == []
+    assert api.lists[0]["prefix"] == "myvoice"
+    assert api.created == []
 
 
 def test_aliyun_cosyvoice_get_or_create_creates_when_missing():
-    class EmptyListTransport(FakeCosyVoiceTransport):
-        def list_voices(self, **kwargs):
-            self.lists.append(kwargs)
+    class EmptyListAPI(FakeAliyunCosyVoiceAPI):
+        def list_voices(self, data):
+            self.lists.append(dict(data))
             return []
 
-    transport = EmptyListTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = EmptyListAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     result = clone.get_or_create_voice(
         audio_url="https://example.com/sample.wav",
@@ -208,21 +209,21 @@ def test_aliyun_cosyvoice_get_or_create_creates_when_missing():
     assert result.voice_id == "myvoice-prefix-001"
     assert result.reused is False
     assert result.prefix == clone.default_prefix("https://example.com/sample.wav")
-    assert transport.created[0]["language_hints"] == ["zh"]
-    assert transport.created[0]["max_prompt_audio_length"] == 20.0
-    assert transport.created[0]["enable_preprocess"] is True
+    assert api.created[0]["input"]["language_hints"] == ["zh"]
+    assert api.created[0]["input"]["max_prompt_audio_length"] == 20.0
+    assert api.created[0]["input"]["enable_preprocess"] is True
 
 
 def test_aliyun_cosyvoice_get_or_create_from_file_uploads_when_missing(tmp_path):
-    class EmptyListTransport(FakeCosyVoiceTransport):
-        def list_voices(self, **kwargs):
-            self.lists.append(kwargs)
+    class EmptyListAPI(FakeAliyunCosyVoiceAPI):
+        def list_voices(self, data):
+            self.lists.append(dict(data))
             return []
 
     sample = tmp_path / "sample.wav"
     sample.write_bytes(b"fake-wav")
-    transport = EmptyListTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = EmptyListAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     result = clone.get_or_create_voice_from_file(
         sample,
@@ -235,44 +236,43 @@ def test_aliyun_cosyvoice_get_or_create_from_file_uploads_when_missing(tmp_path)
     assert result.reused is False
     assert result.audio_url == "https://dashscope-file.example/sample.wav"
     assert result.prefix == clone.default_prefix_for_file(sample)
-    assert transport.uploads[0]["file_path"] == sample
-    assert transport.uploads[0]["purpose"] == "fine-tune"
-    assert transport.files[0]["file_id"] == "file-1"
-    assert transport.created[0]["audio_url"] == "https://dashscope-file.example/sample.wav"
-    assert transport.created[0]["max_prompt_audio_length"] == 10.0
-    assert transport.created[0]["enable_preprocess"] is False
+    assert api.uploads[0] == (sample, "fine-tune")
+    assert api.files[0] == "file-1"
+    assert api.created[0]["input"]["url"] == "https://dashscope-file.example/sample.wav"
+    assert api.created[0]["input"]["max_prompt_audio_length"] == 10.0
+    assert api.created[0]["input"]["enable_preprocess"] is False
 
 
 def test_aliyun_cosyvoice_get_or_create_from_file_reuses_without_upload(tmp_path):
     sample = tmp_path / "sample.wav"
     sample.write_bytes(b"fake-wav")
-    transport = FakeCosyVoiceTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = FakeAliyunCosyVoiceAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     result = clone.get_or_create_voice_from_file(sample, prefix="myvoice")
 
     assert result.voice_id == "myvoice-prefix-001"
     assert result.reused is True
-    assert transport.lists[0]["prefix"] == "myvoice"
-    assert transport.uploads == []
-    assert transport.created == []
+    assert api.lists[0]["prefix"] == "myvoice"
+    assert api.uploads == []
+    assert api.created == []
 
 
 def test_aliyun_cosyvoice_tts_cloned_from_file_is_easy_entrypoint(tmp_path):
-    class EmptyListTransport(FakeCosyVoiceTransport):
-        def list_voices(self, **kwargs):
-            self.lists.append(kwargs)
+    class EmptyListAPI(FakeAliyunCosyVoiceAPI):
+        def list_voices(self, data):
+            self.lists.append(dict(data))
             return []
 
     sample = tmp_path / "sample.wav"
     sample.write_bytes(b"fake-wav")
-    transport = EmptyListTransport()
+    api = EmptyListAPI()
 
     tts = AliyunCosyVoiceTTS.cloned(
         api_key="key",
         sample=sample,
         language_hints=["zh"],
-        transport=transport,
+        api=api,
         wait=True,
         poll_interval=0,
     )
@@ -283,33 +283,33 @@ def test_aliyun_cosyvoice_tts_cloned_from_file_is_easy_entrypoint(tmp_path):
     assert tts.voice_result is not None
     assert tts.voice_result.reused is False
     assert speech.bytes() == b"audio-bytes"
-    assert transport.uploads[0]["file_path"] == sample
-    assert transport.queries[0]["voice_id"] == "myvoice-prefix-001"
-    assert transport.syntheses[0]["voice"] == "myvoice-prefix-001"
+    assert api.uploads[0] == (sample, "fine-tune")
+    assert api.queries[0] == "myvoice-prefix-001"
+    assert api.syntheses[0]["voice"] == "myvoice-prefix-001"
 
 
 def test_aliyun_cosyvoice_tts_cloned_from_url_reuses_existing_voice():
-    transport = FakeCosyVoiceTransport()
+    api = FakeAliyunCosyVoiceAPI()
 
     tts = AliyunCosyVoiceTTS.cloned(
         api_key="key",
         audio_url="https://example.com/sample.wav",
         prefix="myvoice",
-        transport=transport,
+        api=api,
         wait=False,
     )
 
     assert tts.voice == "myvoice-prefix-001"
     assert tts.voice_result is not None
     assert tts.voice_result.reused is True
-    assert transport.created == []
+    assert api.created == []
 
 
 def test_aliyun_cosyvoice_wait_until_ready_returns_ok():
-    transport = FakeCosyVoiceTransport()
-    clone = AliyunCosyVoiceClone(api_key="key", transport=transport)
+    api = FakeAliyunCosyVoiceAPI()
+    clone = AliyunCosyVoiceClone(api_key="key", api=api)
 
     info = clone.wait_until_ready("voice-1", max_attempts=1, poll_interval=0)
 
     assert info["status"] == "OK"
-    assert transport.queries[0]["voice_id"] == "voice-1"
+    assert api.queries[0] == "voice-1"

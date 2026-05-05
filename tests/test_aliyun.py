@@ -4,7 +4,6 @@ import pytest
 
 import voice_hub
 from voice_hub.providers.aliyun import (
-    ALIYUN_BASE_URL,
     ALIYUN_INTL_BASE_URL,
     ALIYUN_QWEN_TTS_FLASH_MODEL,
     ALIYUN_QWEN_TTS_MODEL,
@@ -16,14 +15,14 @@ from voice_hub.providers.aliyun import (
 )
 
 
-class FakeTransport:
+class FakeAliyunQwenTTSAPI:
     def __init__(self):
-        self.posts = []
-        self.streams = []
+        self.generation_calls = []
+        self.stream_calls = []
         self.downloads = []
 
-    def post(self, base_url, api_key, payload, timeout):
-        self.posts.append((base_url, api_key, payload, timeout))
+    def generation(self, data):
+        self.generation_calls.append(dict(data))
         return {
             "request_id": "request-1",
             "output": {
@@ -38,8 +37,8 @@ class FakeTransport:
             },
         }
 
-    def stream(self, base_url, api_key, payload, timeout):
-        self.streams.append((base_url, api_key, payload, timeout))
+    def generation_stream(self, data):
+        self.stream_calls.append(dict(data))
         return [
             {
                 "output": {
@@ -57,8 +56,8 @@ class FakeTransport:
             },
         ]
 
-    def download_url(self, url, timeout):
-        self.downloads.append((url, timeout))
+    def download_url(self, url):
+        self.downloads.append(url)
         return b"audio-bytes"
 
 
@@ -73,12 +72,12 @@ def test_aliyun_system_voice_constants():
 
 
 def test_aliyun_non_stream_payload_and_download():
-    transport = FakeTransport()
+    api = FakeAliyunQwenTTSAPI()
     tts = AliyunTTS(
         api_key="key",
         voice=AliyunVoice.CHERRY,
         instructions="语速较快，带有明显的上扬语调，适合介绍时尚产品",
-        transport=transport,
+        api=api,
     )
 
     speech = tts.speak("那我来给大家推荐一款T恤")
@@ -88,29 +87,26 @@ def test_aliyun_non_stream_payload_and_download():
     assert speech.metadata["request_id"] == "request-1"
     assert speech.metadata["audio_url"] == "https://dashscope-result.example/audio.wav"
 
-    base_url, api_key, payload, timeout = transport.posts[0]
-    assert base_url == ALIYUN_BASE_URL
-    assert api_key == "key"
-    assert timeout == 60
-    assert payload == {
-        "model": ALIYUN_QWEN_TTS_MODEL,
-        "input": {
-            "text": "那我来给大家推荐一款T恤",
-            "voice": "Cherry",
-            "language_type": "Chinese",
-            "instructions": "语速较快，带有明显的上扬语调，适合介绍时尚产品",
-        },
-    }
-    assert transport.downloads == [("https://dashscope-result.example/audio.wav", 60)]
-
+    assert api.generation_calls == [
+        {
+            "model": ALIYUN_QWEN_TTS_MODEL,
+            "input": {
+                "text": "那我来给大家推荐一款T恤",
+                "voice": "Cherry",
+                "language_type": "Chinese",
+                "instructions": "语速较快，带有明显的上扬语调，适合介绍时尚产品",
+            },
+        }
+    ]
+    assert api.downloads == ["https://dashscope-result.example/audio.wav"]
 
 def test_aliyun_build_payload_matches_dashscope_shape():
-    transport = FakeTransport()
+    api = FakeAliyunQwenTTSAPI()
     tts = AliyunTTS(
         api_key="key",
         model=ALIYUN_QWEN_TTS_FLASH_MODEL,
         voice=AliyunVoice.CHERRY,
-        transport=transport,
+        api=api,
     )
 
     payload = tts.build_payload(
@@ -118,7 +114,7 @@ def test_aliyun_build_payload_matches_dashscope_shape():
         language_type="Chinese",
     )
 
-    assert transport.posts == []
+    assert api.generation_calls == []
     assert payload == {
         "model": "qwen3-tts-flash",
         "input": {
@@ -131,36 +127,42 @@ def test_aliyun_build_payload_matches_dashscope_shape():
 
 def test_aliyun_uses_env_api_key(monkeypatch):
     monkeypatch.setenv("DASHSCOPE_API_KEY", "env-key")
-    transport = FakeTransport()
-    tts = AliyunTTS(transport=transport)
+    tts = AliyunTTS()
 
-    tts.bytes("你好")
-
-    assert transport.posts[0][1] == "env-key"
+    assert tts.api.api_key == "env-key"
 
 
 def test_aliyun_stream_returns_chunks():
-    transport = FakeTransport()
-    tts = AliyunTTS(api_key="key", transport=transport)
+    api = FakeAliyunQwenTTSAPI()
+    tts = AliyunTTS(api_key="key", api=api)
 
     assert list(tts.stream("你好")) == [b"chunk-1", b"chunk-2"]
 
-    payload = transport.streams[0][2]
-    assert payload == {
-        "model": ALIYUN_QWEN_TTS_MODEL,
-        "input": {
-            "text": "你好",
-            "voice": "Cherry",
-            "language_type": "Chinese",
-        },
-    }
+    assert api.stream_calls == [
+        {
+            "model": ALIYUN_QWEN_TTS_MODEL,
+            "input": {
+                "text": "你好",
+                "voice": "Cherry",
+                "language_type": "Chinese",
+            },
+        }
+    ]
 
+
+def test_aliyun_can_use_singapore_endpoint():
+    tts = AliyunTTS(
+        api_key="intl-key",
+        base_url=ALIYUN_INTL_BASE_URL,
+    )
+
+    assert tts.api.base_url == "https://dashscope-intl.aliyuncs.com/api/v1"
 
 def test_aliyun_rejects_instructions_for_non_instruct_model():
     tts = AliyunTTS(
         api_key="key",
         model=ALIYUN_QWEN_TTS_FLASH_MODEL,
-        transport=FakeTransport(),
+        api=FakeAliyunQwenTTSAPI(),
     )
 
     with pytest.raises(voice_hub.ConfigurationError, match="instructions require"):
@@ -168,20 +170,7 @@ def test_aliyun_rejects_instructions_for_non_instruct_model():
 
 
 def test_aliyun_rejects_unknown_override():
-    tts = AliyunTTS(api_key="key", transport=FakeTransport())
+    tts = AliyunTTS(api_key="key", api=FakeAliyunQwenTTSAPI())
 
     with pytest.raises(TypeError, match="unsupported Aliyun override"):
         tts.bytes("你好", speed=1.2)
-
-
-def test_aliyun_can_use_singapore_endpoint():
-    transport = FakeTransport()
-    tts = AliyunTTS(
-        api_key="intl-key",
-        base_url=ALIYUN_INTL_BASE_URL,
-        transport=transport,
-    )
-
-    tts.bytes("hello")
-
-    assert transport.posts[0][0] == ALIYUN_INTL_BASE_URL

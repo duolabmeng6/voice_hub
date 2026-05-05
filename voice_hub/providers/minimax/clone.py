@@ -5,12 +5,13 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping, Protocol
 
 from ...errors import ConfigurationError, ProviderError
 from ...sample import VoiceSample
 from ...speech import Speech
 from ..base import BaseTTS
+from .api import MinimaxAPI
 from .models import (
     MINIMAX_BASE_URL,
     MINIMAX_VOICE_CLONE_MODEL,
@@ -18,7 +19,14 @@ from .models import (
     MinimaxVoiceCloneResult,
 )
 from .parser import _raise_for_base_resp
-from .transport import MinimaxHTTPTransport
+
+
+class MinimaxVoiceCloneAPIClient(Protocol):
+    def upload_file(self, file_path: str | Path, purpose: str) -> Mapping[str, Any]: ...
+
+    def voice_clone(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def download_url(self, url: str) -> bytes: ...
 
 
 class MinimaxVoiceClone(BaseTTS):
@@ -35,7 +43,7 @@ class MinimaxVoiceClone(BaseTTS):
         voice_id: str | None = None,
         model: str = MINIMAX_VOICE_CLONE_MODEL,
         base_url: str = MINIMAX_BASE_URL,
-        transport: MinimaxHTTPTransport | None = None,
+        api: MinimaxVoiceCloneAPIClient | None = None,
         timeout: float = 120,
         prompt_sample: VoiceSample | str | Path | None = None,
         prompt_text: str | None = None,
@@ -50,7 +58,7 @@ class MinimaxVoiceClone(BaseTTS):
         self.voice_id = voice_id
         self.model = model
         self.base_url = base_url
-        self.transport = transport or MinimaxHTTPTransport()
+        self.api = api or MinimaxAPI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
         self.timeout = timeout
         self.prompt_sample = self._normalize_sample_path(prompt_sample)
         self.prompt_text = prompt_text
@@ -64,26 +72,14 @@ class MinimaxVoiceClone(BaseTTS):
     def upload_clone_audio(self, path: str | Path) -> str | int:
         """上传 10 秒到 5 分钟的复刻音频，返回 file_id。"""
         self._validate_audio_file(path)
-        response = self.transport.upload_file(
-            self.base_url,
-            self.api_key,
-            path,
-            "voice_clone",
-            self.timeout,
-        )
+        response = self.api.upload_file(path, "voice_clone")
         _raise_for_base_resp(response)
         return self._extract_file_id(response)
 
     def upload_prompt_audio(self, path: str | Path) -> str | int:
         """上传小于 8 秒的示例音频，返回 file_id。"""
         self._validate_audio_file(path)
-        response = self.transport.upload_file(
-            self.base_url,
-            self.api_key,
-            path,
-            "prompt_audio",
-            self.timeout,
-        )
+        response = self.api.upload_file(path, "prompt_audio")
         _raise_for_base_resp(response)
         return self._extract_file_id(response)
 
@@ -115,12 +111,7 @@ class MinimaxVoiceClone(BaseTTS):
             continuous_sound=continuous_sound,
         )
         start = time.monotonic()
-        response = self.transport.voice_clone(
-            self.base_url,
-            self.api_key,
-            payload,
-            self.timeout,
-        )
+        response = self.api.voice_clone(payload)
         _raise_for_base_resp(response)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         raw_response = dict(response)
@@ -160,7 +151,7 @@ class MinimaxVoiceClone(BaseTTS):
         if not result.demo_audio_url:
             raise ProviderError("MiniMax voice clone response missing demo audio url")
 
-        audio = self.transport.download_url(result.demo_audio_url, self.timeout)
+        audio = self.api.download_url(result.demo_audio_url)
         return Speech(
             audio,
             text=text,

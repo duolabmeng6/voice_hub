@@ -12,6 +12,9 @@ ALIYUN_INTL_BASE_URL = (
     "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/"
     "multimodal-generation/generation"
 )
+ALIYUN_API_ROOT_URL = "https://dashscope.aliyuncs.com/api/v1"
+ALIYUN_INTL_API_ROOT_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
+ALIYUN_QWEN_TTS_GENERATION_PATH = "/services/aigc/multimodal-generation/generation"
 ALIYUN_QWEN_TTS_MODEL = "qwen3-tts-instruct-flash"
 ALIYUN_QWEN_TTS_FLASH_MODEL = "qwen3-tts-flash"
 

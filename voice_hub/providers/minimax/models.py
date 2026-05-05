@@ -6,6 +6,9 @@ from typing import Mapping
 from .voices import MinimaxVoice
 
 MINIMAX_BASE_URL = "https://api.minimaxi.com/v1"
+MINIMAX_T2A_PATH = "/t2a_v2"
+MINIMAX_FILES_UPLOAD_PATH = "/files/upload"
+MINIMAX_VOICE_CLONE_PATH = "/voice_clone"
 MINIMAX_T2A_MODEL = "speech-2.8-hd"
 MINIMAX_VOICE_CLONE_MODEL = "speech-2.8-hd"
 

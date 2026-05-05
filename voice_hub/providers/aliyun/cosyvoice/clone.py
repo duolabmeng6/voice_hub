@@ -4,18 +4,35 @@ import hashlib
 import os
 import time
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping, Protocol
 
 from ....errors import ConfigurationError, ProviderError
+from .api import AliyunCosyVoiceAPI
 from .models import (
     ALIYUN_COSYVOICE_CLONE_MODEL,
+    ALIYUN_COSYVOICE_ENROLLMENT_MODEL,
     ALIYUN_COSYVOICE_HTTP_BASE_URL,
     ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
     AliyunCosyVoiceEnrollmentResult,
     AliyunCosyVoiceUploadedFile,
 )
-from .transport import AliyunCosyVoiceSDKTransport
 from .tts import AliyunCosyVoiceTTS
+
+
+class AliyunCosyVoiceAPIClient(Protocol):
+    def synthesize(self, data: Mapping[str, object]) -> tuple[bytes, str | None]: ...
+
+    def create_voice(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def query_voice(self, voice_id: str) -> Mapping[str, Any]: ...
+
+    def list_voices(self, data: Mapping[str, object]) -> list[Mapping[str, Any]]: ...
+
+    def delete_voice(self, voice_id: str) -> str | None: ...
+
+    def upload_file(self, file_path: str | Path, purpose: str) -> Mapping[str, Any]: ...
+
+    def get_file(self, file_id: str) -> Mapping[str, Any]: ...
 
 
 class AliyunCosyVoiceClone:
@@ -27,14 +44,19 @@ class AliyunCosyVoiceClone:
         target_model: str = ALIYUN_COSYVOICE_CLONE_MODEL,
         http_base_url: str = ALIYUN_COSYVOICE_HTTP_BASE_URL,
         websocket_base_url: str = ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL,
-        transport: AliyunCosyVoiceSDKTransport | None = None,
+        api: AliyunCosyVoiceAPIClient | None = None,
         timeout: float = 120,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.environ.get("DASHSCOPE_API_KEY", "")
         self.target_model = target_model
         self.http_base_url = http_base_url
         self.websocket_base_url = websocket_base_url
-        self.transport = transport or AliyunCosyVoiceSDKTransport()
+        self.api = api or AliyunCosyVoiceAPI(
+            api_key=self.api_key,
+            http_base_url=self.http_base_url,
+            websocket_base_url=self.websocket_base_url,
+            timeout=timeout,
+        )
         self.timeout = timeout
         self._validate_config()
 
@@ -48,26 +70,55 @@ class AliyunCosyVoiceClone:
         enable_preprocess: bool | None = None,
     ) -> AliyunCosyVoiceEnrollmentResult:
         final_prefix = prefix or self.default_prefix(audio_url)
-        voice_id, request_id = self.transport.create_voice(
-            api_key=self.api_key,
-            target_model=self.target_model,
-            prefix=final_prefix,
-            audio_url=audio_url,
-            language_hints=language_hints,
-            max_prompt_audio_length=max_prompt_audio_length,
-            enable_preprocess=enable_preprocess,
-            http_base_url=self.http_base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
+        response = self.api.create_voice(
+            self.build_create_voice_payload(
+                audio_url=audio_url,
+                prefix=final_prefix,
+                language_hints=language_hints,
+                max_prompt_audio_length=max_prompt_audio_length,
+                enable_preprocess=enable_preprocess,
+            )
         )
+        output = response.get("output")
+        if not isinstance(output, Mapping):
+            raise ProviderError(f"Aliyun CosyVoice voice creation missing output: {response}")
+        voice_id = output.get("voice_id")
+        if not isinstance(voice_id, str) or not voice_id:
+            raise ProviderError("Aliyun CosyVoice voice creation returned invalid voice_id")
         return AliyunCosyVoiceEnrollmentResult(
             voice_id=voice_id,
-            request_id=request_id,
+            request_id=_optional_str(response.get("request_id")),
             target_model=self.target_model,
             prefix=final_prefix,
             audio_url=audio_url,
             reused=False,
         )
+
+    def build_create_voice_payload(
+        self,
+        *,
+        audio_url: str,
+        prefix: str,
+        language_hints: list[str] | None = None,
+        max_prompt_audio_length: float | None = None,
+        enable_preprocess: bool | None = None,
+    ) -> dict[str, object]:
+        input_data: dict[str, object] = {
+            "action": "create_voice",
+            "target_model": self.target_model,
+            "prefix": prefix,
+            "url": audio_url,
+        }
+        if language_hints is not None:
+            input_data["language_hints"] = list(language_hints)
+        if max_prompt_audio_length is not None:
+            input_data["max_prompt_audio_length"] = max_prompt_audio_length
+        if enable_preprocess is not None:
+            input_data["enable_preprocess"] = enable_preprocess
+        return {
+            "model": ALIYUN_COSYVOICE_ENROLLMENT_MODEL,
+            "input": input_data,
+        }
 
     def get_or_create_voice(
         self,
@@ -151,13 +202,7 @@ class AliyunCosyVoiceClone:
         *,
         purpose: str = "fine-tune",
     ) -> AliyunCosyVoiceUploadedFile:
-        response = self.transport.upload_file(
-            api_key=self.api_key,
-            file_path=file_path,
-            purpose=purpose,
-            http_base_url=self.http_base_url,
-            timeout=self.timeout,
-        )
+        response = self.api.upload_file(file_path, purpose)
         request_id = _optional_str(response.get("request_id"))
         uploaded = _first_uploaded_file(response)
         file_id = uploaded.get("file_id")
@@ -165,12 +210,7 @@ class AliyunCosyVoiceClone:
         if not isinstance(file_id, str) or not isinstance(name, str):
             raise ProviderError(f"Aliyun file upload returned invalid response: {response}")
 
-        file_info = self.transport.get_file(
-            api_key=self.api_key,
-            file_id=file_id,
-            http_base_url=self.http_base_url,
-            timeout=self.timeout,
-        )
+        file_info = self.api.get_file(file_id)
         data = file_info.get("data")
         if not isinstance(data, Mapping):
             raise ProviderError(f"Aliyun file query returned invalid response: {file_info}")
@@ -217,13 +257,7 @@ class AliyunCosyVoiceClone:
         return f"vh{digest.hexdigest()[:8]}"
 
     def query_voice(self, voice_id: str) -> Mapping[str, object]:
-        return self.transport.query_voice(
-            api_key=self.api_key,
-            voice_id=voice_id,
-            http_base_url=self.http_base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
-        )
+        return self.api.query_voice(voice_id)
 
     def list_voices(
         self,
@@ -232,24 +266,16 @@ class AliyunCosyVoiceClone:
         page_index: int = 0,
         page_size: int = 10,
     ) -> list[Mapping[str, object]]:
-        return self.transport.list_voices(
-            api_key=self.api_key,
-            prefix=prefix,
-            page_index=page_index,
-            page_size=page_size,
-            http_base_url=self.http_base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
+        return self.api.list_voices(
+            {
+                "prefix": prefix,
+                "page_index": page_index,
+                "page_size": page_size,
+            }
         )
 
     def delete_voice(self, voice_id: str) -> str | None:
-        return self.transport.delete_voice(
-            api_key=self.api_key,
-            voice_id=voice_id,
-            http_base_url=self.http_base_url,
-            websocket_base_url=self.websocket_base_url,
-            timeout=self.timeout,
-        )
+        return self.api.delete_voice(voice_id)
 
     def wait_until_ready(
         self,
@@ -275,7 +301,7 @@ class AliyunCosyVoiceClone:
             model=self.target_model,
             http_base_url=self.http_base_url,
             websocket_base_url=self.websocket_base_url,
-            transport=self.transport,
+            api=self.api,
             timeout=self.timeout,
             **kwargs,
         )
@@ -314,6 +340,8 @@ def _optional_str(value: object) -> str | None:
 
 def _optional_int(value: object) -> int | None:
     return value if isinstance(value, int) else None
+
+
 
 
 def _first_uploaded_file(response: Mapping[str, object]) -> Mapping[str, object]:

@@ -7,6 +7,7 @@ from typing import Mapping
 ALIYUN_COSYVOICE_HTTP_BASE_URL = "https://dashscope.aliyuncs.com/api/v1"
 ALIYUN_COSYVOICE_WEBSOCKET_BASE_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
 ALIYUN_COSYVOICE_CUSTOMIZATION_PATH = "/services/audio/tts/customization"
+ALIYUN_COSYVOICE_FILES_PATH = "/files"
 ALIYUN_COSYVOICE_MODEL = "cosyvoice-v3-flash"
 ALIYUN_COSYVOICE_CLONE_MODEL = "cosyvoice-v3.5-flash"
 ALIYUN_COSYVOICE_ENROLLMENT_MODEL = "voice-enrollment"

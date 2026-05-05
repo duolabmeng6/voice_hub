@@ -1,7 +1,11 @@
+from .api import MinimaxAPI, MinimaxBaseAPI
 from .clone import MinimaxVoiceClone
 from .models import (
     MINIMAX_BASE_URL,
+    MINIMAX_FILES_UPLOAD_PATH,
     MINIMAX_T2A_MODEL,
+    MINIMAX_T2A_PATH,
+    MINIMAX_VOICE_CLONE_PATH,
     MINIMAX_VOICE_CLONE_MODEL,
     MinimaxClonePrompt,
     MinimaxVoice,
@@ -18,12 +22,17 @@ from .voices import (
 
 __all__ = [
     "MINIMAX_BASE_URL",
+    "MINIMAX_FILES_UPLOAD_PATH",
     "MINIMAX_SYSTEM_VOICE_BY_ID",
     "MINIMAX_SYSTEM_VOICE_IDS",
     "MINIMAX_SYSTEM_VOICES",
     "MINIMAX_SYSTEM_VOICES_BY_LANGUAGE",
     "MINIMAX_T2A_MODEL",
+    "MINIMAX_T2A_PATH",
+    "MINIMAX_VOICE_CLONE_PATH",
     "MINIMAX_VOICE_CLONE_MODEL",
+    "MinimaxAPI",
+    "MinimaxBaseAPI",
     "MinimaxClonePrompt",
     "MinimaxTTS",
     "MinimaxVoice",

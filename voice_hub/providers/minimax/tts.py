@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping, Protocol
 
 from ...errors import ConfigurationError
 from ...sample import VoiceSample
 from ...speech import Speech
 from ..base import BaseTTS
+from .api import MinimaxAPI
 from .clone import MinimaxVoiceClone
 from .models import (
     MINIMAX_BASE_URL,
@@ -18,7 +19,12 @@ from .models import (
 )
 from .parser import MinimaxResponseParser
 from .payload import MinimaxPayloadBuilder
-from .transport import MinimaxHTTPTransport
+
+
+class MinimaxAPIClient(Protocol):
+    def t2a_v2(self, data: Mapping[str, object]) -> Mapping[str, Any]: ...
+
+    def t2a_v2_stream(self, data: Mapping[str, object]) -> Iterable[Mapping[str, Any]]: ...
 
 
 class MinimaxTTS(BaseTTS):
@@ -30,7 +36,7 @@ class MinimaxTTS(BaseTTS):
         model: MiniMax T2A 模型 ID，默认 ``speech-2.8-hd``。
         format: 输出音频格式，支持 ``mp3``、``pcm``、``flac``，非流式也支持 ``wav``。
         base_url: MiniMax API 根地址，默认 ``https://api.minimaxi.com/v1``。
-        transport: 自定义 HTTP 传输层，主要用于测试、代理或替换标准库请求实现。
+        api: 自定义 MiniMax API 客户端，主要用于测试、代理或替换请求实现。
         timeout: 单次 HTTP 请求超时时间，单位秒。
     """
 
@@ -41,7 +47,7 @@ class MinimaxTTS(BaseTTS):
         model: str = MINIMAX_T2A_MODEL,
         format: str = "mp3",
         base_url: str = MINIMAX_BASE_URL,
-        transport: MinimaxHTTPTransport | None = None,
+        api: MinimaxAPIClient | None = None,
         timeout: float = 60,
         speed: float = 1,
         vol: float = 1,
@@ -67,7 +73,7 @@ class MinimaxTTS(BaseTTS):
         self.model = model
         self.format = format
         self.base_url = base_url
-        self.transport = transport or MinimaxHTTPTransport()
+        self.api = api or MinimaxAPI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
         self.timeout = timeout
         self.speed = speed
         self.vol = vol
@@ -93,13 +99,9 @@ class MinimaxTTS(BaseTTS):
     def speak(self, text: str, **overrides: object) -> Speech:
         """合成语音并返回音频结果。"""
         request = self.build_request(text, stream=False, **overrides)
+        data = request.to_payload()
         start = time.monotonic()
-        response = self.transport.post(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        response = self.api.t2a_v2(data)
         audio = self._parser.decode_audio(response)
         elapsed_ms = round((time.monotonic() - start) * 1000, 3)
         return Speech(
@@ -114,7 +116,7 @@ class MinimaxTTS(BaseTTS):
                 "extra_info": response.get("extra_info"),
                 "elapsed_ms": elapsed_ms,
                 "audio_bytes": len(audio),
-                "payload": request.to_payload(),
+                "payload": data,
             },
         )
 
@@ -164,12 +166,7 @@ class MinimaxTTS(BaseTTS):
 
     def stream_synthesize(self, text: str, **overrides: object) -> Iterable[bytes]:
         request = self.build_request(text, stream=True, **overrides)
-        events = self.transport.stream(
-            self.base_url,
-            self.api_key,
-            request.to_payload(),
-            self.timeout,
-        )
+        events = self.api.t2a_v2_stream(request.to_payload())
         return self._parser.iter_audio_chunks(events)
 
     def _payload_builder(self) -> MinimaxPayloadBuilder:
