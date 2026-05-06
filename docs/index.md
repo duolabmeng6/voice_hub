@@ -8,6 +8,20 @@
 pip install duolabmeng6-voice-hub
 ```
 
+基础安装适用于 MiniMax、MiMo、智谱 GLM 和阿里云百炼 Qwen TTS。
+
+如果使用阿里云百炼 CosyVoice，需要额外安装 DashScope SDK：
+
+```bash
+pip install duolabmeng6-voice-hub dashscope
+```
+
+本地开发或测试时，请把额外依赖安装到当前项目使用的同一个 Python 环境：
+
+```bash
+python -m pip install -e . dashscope
+```
+
 推荐写法是先 `speak()`，再 `save()`：
 
 ```python

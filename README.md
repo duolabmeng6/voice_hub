@@ -37,6 +37,20 @@ pip install duolabmeng6-voice-hub
 
 Python 版本要求：`>=3.10`。
 
+基础安装会安装通用 HTTP 依赖，适用于 MiniMax、MiMo、智谱 GLM 和阿里云百炼 Qwen TTS。
+
+如果使用阿里云百炼 CosyVoice，需要额外安装 DashScope SDK：
+
+```bash
+pip install duolabmeng6-voice-hub dashscope
+```
+
+本地开发或在 PyCharm 使用已有 `.venv` 跑 CosyVoice 测试时，请把 `dashscope` 安装到同一个 Python 环境：
+
+```bash
+python -m pip install -e . dashscope
+```
+
 ## 为什么用它
 
 直接接 TTS 服务时，业务代码很快会被这些问题拖住：
@@ -312,6 +326,12 @@ voice_hub.AliyunTTS(model=voice_hub.ALIYUN_QWEN_TTS_FLASH_MODEL)
 ## 阿里云百炼 CosyVoice
 
 默认读取 `DASHSCOPE_API_KEY`，需要环境里已安装 DashScope SDK。
+
+如果还没有安装：
+
+```bash
+python -m pip install dashscope
+```
 
 常用入口：
 

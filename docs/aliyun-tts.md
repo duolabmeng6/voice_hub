@@ -7,14 +7,28 @@
 
 ## 准备
 
+先安装 `voice_hub`：
+
+```bash
+pip install duolabmeng6-voice-hub
+```
+
 ```bash
 export DASHSCOPE_API_KEY="你的 DashScope API Key"
 ```
 
-如果使用 CosyVoice，需要安装 DashScope SDK：
+Qwen TTS 走 HTTP API，不需要额外 SDK。
+
+如果使用 CosyVoice，需要额外安装 DashScope SDK：
 
 ```bash
-pip install dashscope
+pip install duolabmeng6-voice-hub dashscope
+```
+
+本地开发或测试时，请把 `dashscope` 安装到当前项目使用的同一个 Python 环境：
+
+```bash
+python -m pip install -e . dashscope
 ```
 
 ## Qwen TTS
